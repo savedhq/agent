@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
 
@@ -30,7 +31,7 @@ jobs:
     name: Build and Push Docker Image
     needs: test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
     permissions:
       contents: read
       packages: write
@@ -51,7 +52,8 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=tag
             type=sha
 
       - name: Build and push Docker image
@@ -66,24 +68,17 @@ jobs:
     name: Build Binaries
     needs: test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+    permissions:
+      contents: write
     strategy:
       matrix:
         include:
           - os: windows
-            arch: 386
-            ext: .exe
-          - os: windows
             arch: amd64
             ext: .exe
           - os: linux
-            arch: 386
-            ext: ''
-          - os: linux
             arch: amd64
-            ext: ''
-          - os: freebsd
-            arch: 386
             ext: ''
           - os: freebsd
             arch: amd64
@@ -113,3 +108,9 @@ jobs:
         with:
           name: agent-${{ matrix.os }}-${{ matrix.arch }}
           path: agent-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: agent-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
