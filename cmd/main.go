@@ -6,6 +6,7 @@ import (
 	"agent/internal/temporal/activities"
 	"agent/internal/temporal/workflows"
 	"agent/pkg"
+	"agent/pkg/names"
 	"context"
 	"crypto/tls"
 	"log"
@@ -73,20 +74,20 @@ func main() {
 	w := worker.New(c, hubConfig.Queue, workerOptions)
 
 	// Register workflows (same names as backend)
-	w.RegisterWorkflowWithOptions(workflows.HTTPBackupWorkflow, workflow.RegisterOptions{Name: "http"})
+	w.RegisterWorkflowWithOptions(workflows.HTTPBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameHTTP})
 
 	// Create activities instance with dependency injection
 	acts := activities.NewActivities(cfg, authService, *hubConfig)
 
 	// Register activities
-	w.RegisterActivityWithOptions(acts.BackupRequestActivity, activity.RegisterOptions{Name: "BackupRequestActivity"})
-	w.RegisterActivityWithOptions(acts.BackupUploadActivity, activity.RegisterOptions{Name: "BackupUploadActivity"})
-	w.RegisterActivityWithOptions(acts.BackupConfirmActivity, activity.RegisterOptions{Name: "BackupConfirmActivity"})
-	w.RegisterActivityWithOptions(acts.FileCompressionActivity, activity.RegisterOptions{Name: "FileCompressionActivity"})
-	w.RegisterActivityWithOptions(acts.DownloadActivity, activity.RegisterOptions{Name: "DownloadActivity"})
-	w.RegisterActivityWithOptions(acts.FileEncryptionActivity, activity.RegisterOptions{Name: "FileEncryptionActivity"})
-	w.RegisterActivityWithOptions(acts.GetJobActivity, activity.RegisterOptions{Name: "GetJobActivity"})
-	w.RegisterActivityWithOptions(acts.FileUploadS3Activity, activity.RegisterOptions{Name: "FileUploadS3Activity"})
+	w.RegisterActivityWithOptions(acts.BackupRequestActivity, activity.RegisterOptions{Name: names.ActivityNameBackupRequest})
+	w.RegisterActivityWithOptions(acts.BackupUploadActivity, activity.RegisterOptions{Name: names.ActivityNameBackupUpload})
+	w.RegisterActivityWithOptions(acts.BackupConfirmActivity, activity.RegisterOptions{Name: names.ActivityNameBackupConfirm})
+	w.RegisterActivityWithOptions(acts.FileCompressionActivity, activity.RegisterOptions{Name: names.ActivityNameCompressFile})
+	w.RegisterActivityWithOptions(acts.DownloadActivity, activity.RegisterOptions{Name: names.ActivityNameDownload})
+	w.RegisterActivityWithOptions(acts.FileEncryptionActivity, activity.RegisterOptions{Name: names.ActivityNameEncryptFile})
+	w.RegisterActivityWithOptions(acts.GetJobActivity, activity.RegisterOptions{Name: names.ActivityNameGetJob})
+	w.RegisterActivityWithOptions(acts.FileUploadS3Activity, activity.RegisterOptions{Name: names.ActivityNameFileUploadS3})
 
 	log.Printf("Loaded %d jobs from config", len(cfg.Jobs))
 	for _, job := range cfg.Jobs {
