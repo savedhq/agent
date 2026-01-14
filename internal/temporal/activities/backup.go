@@ -40,8 +40,21 @@ func (a *Activities) BackupRequestActivity(ctx context.Context, input BackupRequ
 		a.Hub.Workspace,
 		input.Job.ID)
 
+	// Get Temporal Run ID
+	info := activity.GetInfo(ctx)
+	runID := info.WorkflowExecution.RunID
+
+	// Create request body
+	reqBody := map[string]string{
+		"run_id": runID,
+	}
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
 	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
