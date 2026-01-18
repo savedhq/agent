@@ -1,7 +1,7 @@
 package activities
 
 import (
-	"agent/internal/config"
+	"agent/internal/config/job"
 	"context"
 	"fmt"
 
@@ -13,7 +13,7 @@ type GetJobActivityInput struct {
 }
 
 type GetJobActivityOutput struct {
-	Job *config.Job
+	Job *job.Job
 }
 
 func (a *Activities) GetJobActivity(ctx context.Context, input GetJobActivityInput) (*GetJobActivityOutput, error) {

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"agent/internal/config/job"
 	"context"
 	"errors"
 	"fmt"
@@ -14,14 +15,27 @@ type Config struct {
 	API     string     `mapstructure:"api"` // Backend API URL for fetching hub config
 	TempDir string     `mapstructure:"temp_dir"`
 	Auth    AuthConfig `mapstructure:"auth"`
-	Jobs    []Job      `mapstructure:"jobs"`
+	Jobs    []job.Job  `mapstructure:"jobs"`
+}
+
+// tempConfig is used for initial Viper unmarshaling with map configs
+type tempConfig struct {
+	API     string     `mapstructure:"api"`
+	TempDir string     `mapstructure:"temp_dir"`
+	Auth    AuthConfig `mapstructure:"auth"`
+	Jobs    []tempJob  `mapstructure:"jobs"`
+}
+
+// tempJob is used for initial unmarshaling before converting to typed config
+type tempJob struct {
+	ID       string         `mapstructure:"id"`
+	Provider string         `mapstructure:"provider"`
+	Config   map[string]any `mapstructure:"config"`
 }
 
 // NewConfig loads configuration from file, environment variables, and optionally Vault
 // configPath: path to the config file (e.g., "config.yaml"). If empty, looks for "config.yaml" in current directory
 func NewConfig(ctx context.Context, configPath string) (*Config, error) {
-	config := new(Config)
-
 	// Set default values matching config.yaml
 	viper.SetDefault("api", "")
 
@@ -55,8 +69,35 @@ func NewConfig(ctx context.Context, configPath string) (*Config, error) {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
-	if err := viper.Unmarshal(config); err != nil {
+	// First unmarshal into temp config with map-based job configs
+	var temp tempConfig
+	if err := viper.Unmarshal(&temp); err != nil {
 		return nil, err
+	}
+
+	// Convert to final config with typed job configs
+	config := &Config{
+		API:     temp.API,
+		TempDir: temp.TempDir,
+		Auth:    temp.Auth,
+		Jobs:    make([]job.Job, len(temp.Jobs)),
+	}
+
+	// Convert each job's map config to typed config
+	for i, tj := range temp.Jobs {
+		provider := job.JobProvider(tj.Provider)
+
+		// Convert map to typed config
+		typedConfig, err := job.FromMap(provider, tj.Config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config for job %s (provider %s): %w", tj.ID, tj.Provider, err)
+		}
+
+		config.Jobs[i] = job.Job{
+			ID:       tj.ID,
+			Provider: provider,
+			Config:   typedConfig,
+		}
 	}
 
 	return config, nil

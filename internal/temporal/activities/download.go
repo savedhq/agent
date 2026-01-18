@@ -1,7 +1,7 @@
 package activities
 
 import (
-	"agent/internal/config"
+	"agent/internal/config/job"
 	"context"
 	"crypto/sha256"
 	"fmt"
@@ -16,7 +16,7 @@ import (
 )
 
 type DownloadActivityInput struct {
-	Job *config.Job `json:"job"`
+	Job *job.Job `json:"job"`
 }
 
 type DownloadActivityOutput struct {
@@ -31,15 +31,20 @@ func (a *Activities) DownloadActivity(ctx context.Context, input DownloadActivit
 	logger := activity.GetLogger(ctx)
 	logger.Debug("DownloadActivity called", "jobId", input.Job.ID)
 
-	// Get Endpoint from job config
-	endpoint, ok := input.Job.Config["endpoint"].(string)
-	if !ok || endpoint == "" {
-		return nil, fmt.Errorf("endpoint not found in job config")
+	// Load typed HTTP config
+	httpConfig, err := job.LoadAs[*job.HTTPConfig](*input.Job)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load HTTP config: %w", err)
 	}
 
-	// Get Method from job config
-	method, ok := input.Job.Config["method"].(string)
-	if !ok || method == "" {
+	// Validate config
+	if err := httpConfig.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid HTTP config: %w", err)
+	}
+
+	endpoint := httpConfig.URL
+	method := httpConfig.Method
+	if method == "" {
 		method = "GET"
 	}
 
@@ -52,21 +57,12 @@ func (a *Activities) DownloadActivity(ctx context.Context, input DownloadActivit
 	}
 
 	// Add headers if present
-	if headers, ok := input.Job.Config["headers"].(map[string]interface{}); ok {
-		for k, v := range headers {
-			if strVal, ok := v.(string); ok {
-				req.Header.Set(k, strVal)
-			}
-		}
+	for k, v := range httpConfig.Headers {
+		req.Header.Set(k, v)
 	}
 
-	// Get timeout
+	// Use default timeout
 	timeoutVal := 30 * time.Minute
-	if t, ok := input.Job.Config["timeout"].(float64); ok {
-		timeoutVal = time.Duration(t) * time.Second
-	} else if t, ok := input.Job.Config["timeout"].(int); ok {
-		timeoutVal = time.Duration(t) * time.Second
-	}
 
 	// Execute request
 	client := &http.Client{Timeout: timeoutVal}

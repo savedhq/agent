@@ -1,7 +1,7 @@
 package activities
 
 import (
-	"agent/internal/config"
+	"agent/internal/config/job"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -15,7 +15,7 @@ import (
 )
 
 type BackupRequestActivityInput struct {
-	Job *config.Job `json:"job"`
+	Job *job.Job `json:"job"`
 }
 
 type BackupRequestActivityOutput struct {
