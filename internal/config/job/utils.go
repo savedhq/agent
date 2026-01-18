@@ -7,11 +7,11 @@ import (
 
 // configFactories maps providers to their config factory functions
 var configFactories = map[JobProvider]func() JobConfig{
-	JobProviderHTTP:          func() JobConfig { return &HTTPConfig{} },
-	JobProviderScript:        func() JobConfig { return &ScriptConfig{} },
-	JobProviderAWSS3:         func() JobConfig { return &AWSS3Config{} },
-	JobProviderGoogleDrive:   func() JobConfig { return &GoogleDriveConfig{} },
-	JobProvideriCloudStorage: func() JobConfig { return &ICloudStorageConfig{} },
+	JobProviderHTTP:          func() JobConfig { return new(HTTPConfig) },
+	JobProviderScript:        func() JobConfig { return new(ScriptConfig) },
+	JobProviderAWSS3:         func() JobConfig { return new(AWSS3Config) },
+	JobProviderGoogleDrive:   func() JobConfig { return new(GoogleDriveConfig) },
+	JobProvideriCloudStorage: func() JobConfig { return new(ICloudStorageConfig) },
 }
 
 // NewConfig creates a new empty config for the given provider
