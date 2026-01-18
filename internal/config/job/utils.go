@@ -73,3 +73,59 @@ func LoadAs[T JobConfig](job Job) (T, error) {
 	}
 	return result, nil
 }
+
+// MarshalJSON implements custom JSON marshaling for Job
+func (j *Job) MarshalJSON() ([]byte, error) {
+	// Marshal config to map first
+	configMap, err := Marshal(j.Config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Create a temporary struct for marshaling
+	temp := struct {
+		ID          string            `json:"id"`
+		Provider    JobProvider       `json:"provider"`
+		Config      map[string]any    `json:"config"`
+		Encryption  EncryptionConfig  `json:"encryption_config"`
+		Compression CompressionConfig `json:"compression_config"`
+	}{
+		ID:          j.ID,
+		Provider:    j.Provider,
+		Config:      configMap,
+		Encryption:  j.Encryption,
+		Compression: j.Compression,
+	}
+
+	return json.Marshal(temp)
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for Job
+func (j *Job) UnmarshalJSON(data []byte) error {
+	// Unmarshal into temporary struct
+	temp := struct {
+		ID          string            `json:"id"`
+		Provider    JobProvider       `json:"provider"`
+		Config      map[string]any    `json:"config"`
+		Encryption  EncryptionConfig  `json:"encryption_config"`
+		Compression CompressionConfig `json:"compression_config"`
+	}{}
+
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
+	// Convert map to typed config
+	typedConfig, err := FromMap(temp.Provider, temp.Config)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal config for provider %s: %w", temp.Provider, err)
+	}
+
+	j.ID = temp.ID
+	j.Provider = temp.Provider
+	j.Config = typedConfig
+	j.Encryption = temp.Encryption
+	j.Compression = temp.Compression
+
+	return nil
+}

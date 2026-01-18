@@ -28,9 +28,11 @@ type tempConfig struct {
 
 // tempJob is used for initial unmarshaling before converting to typed config
 type tempJob struct {
-	ID       string         `mapstructure:"id"`
-	Provider string         `mapstructure:"provider"`
-	Config   map[string]any `mapstructure:"config"`
+	ID          string                `mapstructure:"id"`
+	Provider    string                `mapstructure:"provider"`
+	Config      map[string]any        `mapstructure:"config"`
+	Encryption  job.EncryptionConfig  `mapstructure:"encryption_config"`
+	Compression job.CompressionConfig `mapstructure:"compression_config"`
 }
 
 // NewConfig loads configuration from file, environment variables, and optionally Vault
@@ -94,9 +96,11 @@ func NewConfig(ctx context.Context, configPath string) (*Config, error) {
 		}
 
 		config.Jobs[i] = job.Job{
-			ID:       tj.ID,
-			Provider: provider,
-			Config:   typedConfig,
+			ID:          tj.ID,
+			Provider:    provider,
+			Config:      typedConfig,
+			Encryption:  tj.Encryption,
+			Compression: tj.Compression,
 		}
 	}
 
