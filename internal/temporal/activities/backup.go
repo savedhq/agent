@@ -40,13 +40,13 @@ func (a *Activities) BackupRequestActivity(ctx context.Context, input BackupRequ
 		a.Hub.Workspace,
 		input.Job.ID)
 
-	// Get Temporal Run ID
+	// Get Temporal Workflow ID (backend expects this in the "run_id" field to signal the workflow)
 	info := activity.GetInfo(ctx)
-	runID := info.WorkflowExecution.RunID
+	workflowID := info.WorkflowExecution.ID
 
 	// Create request body
 	reqBody := map[string]string{
-		"run_id": runID,
+		"run_id": workflowID,
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
