@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/tls"
 	"log"
+	"time"
 
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/contrib/envconfig"
@@ -40,9 +41,23 @@ func main() {
 	clientOptions := envconfig.MustLoadDefaultClientOptions()
 
 	if hubConfig.TLS.Enabled {
-		tlsConfig := &tls.Config{
-			MinVersion: tls.VersionTLS12,
-			NextProtos: []string{"h2"},
+		var tlsConfig *tls.Config
+		if hubConfig.TLS.CertFile != "" && hubConfig.TLS.KeyFile != "" {
+			cert, err := tls.LoadX509KeyPair(hubConfig.TLS.CertFile, hubConfig.TLS.KeyFile)
+			if err != nil {
+				log.Fatalf("Failed to load TLS certificates: %v", err)
+			}
+			tlsConfig = &tls.Config{
+				Certificates: []tls.Certificate{cert},
+				MinVersion:   tls.VersionTLS12,
+				NextProtos:   []string{"h2"},
+			}
+		} else {
+			// Default TLS config if no certs provided
+			tlsConfig = &tls.Config{
+				MinVersion: tls.VersionTLS12,
+				NextProtos: []string{"h2"},
+			}
 		}
 
 		clientOptions.ConnectionOptions = temporalclient.ConnectionOptions{
@@ -57,10 +72,26 @@ func main() {
 		return authService.Token()
 	})
 
-	c, err := temporalclient.DialContext(ctx, clientOptions)
+	var c temporalclient.Client
+	var err error
+
+	for i := 0; i < hubConfig.MaxReconnectAttempts; i++ {
+		dialCtx, cancel := context.WithTimeout(ctx, hubConfig.ConnectionTimeout)
+
+		c, err = temporalclient.DialContext(dialCtx, clientOptions)
+		cancel()
+		if err == nil {
+			break
+		}
+
+		log.Printf("Failed to connect to Temporal (attempt %d/%d): %v", i+1, hubConfig.MaxReconnectAttempts, err)
+		if i < hubConfig.MaxReconnectAttempts-1 {
+			time.Sleep(2 * time.Second) // Wait before retrying
+		}
+	}
 
 	if err != nil {
-		log.Fatalln("Unable to create Temporal client", err)
+		log.Fatalln("Unable to create Temporal client after multiple attempts", err)
 	}
 	log.Printf("Connected to workspace: %s, queue: %s", hubConfig.Workspace, hubConfig.Queue)
 
