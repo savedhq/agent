@@ -138,7 +138,7 @@ func TestJobMarshalUnmarshalWithEncryptionCompression(t *testing.T) {
 		},
 		Encryption: EncryptionConfig{
 			Enabled:   true,
-			PublicKey: "test-public-key-123",
+			Key: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef", // 32-byte hex
 		},
 		Compression: CompressionConfig{
 			Enabled:   true,
@@ -165,8 +165,8 @@ func TestJobMarshalUnmarshalWithEncryptionCompression(t *testing.T) {
 	if restored.Encryption.Enabled != original.Encryption.Enabled {
 		t.Errorf("Encryption.Enabled mismatch: got %v, want %v", restored.Encryption.Enabled, original.Encryption.Enabled)
 	}
-	if restored.Encryption.PublicKey != original.Encryption.PublicKey {
-		t.Errorf("Encryption.PublicKey mismatch: got %s, want %s", restored.Encryption.PublicKey, original.Encryption.PublicKey)
+	if restored.Encryption.Key != original.Encryption.Key {
+		t.Errorf("Encryption.Key mismatch: got %s, want %s", restored.Encryption.Key, original.Encryption.Key)
 	}
 
 	// Verify compression config
