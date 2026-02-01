@@ -10,6 +10,9 @@ import (
 	"context"
 	"crypto/tls"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/contrib/envconfig"
@@ -95,9 +98,17 @@ func main() {
 	}
 
 	// Start listening to the Task Queue.
-	err = w.Run(worker.InterruptCh())
+	stopChan := make(chan os.Signal, 1)
+	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
+
+	err = w.Start()
 	if err != nil {
-		log.Fatalln("unable to start Worker", err)
+		log.Fatalln("Unable to start worker", err)
 	}
 
+	<-stopChan
+
+	log.Println("Graceful shutdown received, stopping worker.")
+	w.Stop()
+	log.Println("Worker stopped.")
 }
