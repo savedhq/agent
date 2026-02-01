@@ -88,12 +88,32 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 	////////////////////////////////////////
 	// 4. Compress + encrypt file
 	////////////////////////////////////////
-	//var FileCompressionActivityOutput activities.FileCompressionActivityOutput
-	//err = workflow.ExecuteActivity(
-	//	ctx,
-	//	"FileCompressionActivity",
-	//	activities.FileCompressionActivityInput{},
-	//).Get(ctx, &FileCompressionActivityOutput)
+	var fileCompressionActivityOutput activities.FileCompressionActivityOutput
+	err = workflow.ExecuteActivity(
+		ctx,
+		"FileCompressionActivity",
+		activities.FileCompressionActivityInput{
+			FilePath:         DownloadActivityOutput.FilePath,
+			CompressionLevel: input.CompressionLevel,
+		},
+	).Get(ctx, &fileCompressionActivityOutput)
+	if err != nil {
+		logger.Error("Failed to compress file", "error", err)
+		return nil, err
+	}
+
+	var getFileMetadataActivityOutput activities.GetFileMetadataActivityOutput
+	err = workflow.ExecuteActivity(
+		ctx,
+		"GetFileMetadataActivity",
+		activities.GetFileMetadataActivityInput{
+			FilePath: fileCompressionActivityOutput.FilePath,
+		},
+	).Get(ctx, &getFileMetadataActivityOutput)
+	if err != nil {
+		logger.Error("Failed to get file metadata", "error", err)
+		return nil, err
+	}
 
 	//var FileEncryptionActivityOutput activities.FileEncryptionActivityOutput
 	//err = workflow.ExecuteActivity(
@@ -112,9 +132,9 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 		activities.BackupUploadActivityInput{
 			JobId:    input.JobId,
 			BackupId: BackupRequestActivityOutput.ID.String(),
-			FilePath: DownloadActivityOutput.FilePath,
-			Size:     DownloadActivityOutput.Size,
-			Checksum: DownloadActivityOutput.Checksum,
+			FilePath: fileCompressionActivityOutput.FilePath,
+			Size:     getFileMetadataActivityOutput.Size,
+			Checksum: getFileMetadataActivityOutput.Checksum,
 			Name:     DownloadActivityOutput.Name,
 			MimeType: DownloadActivityOutput.MimeType,
 		},
@@ -141,6 +161,34 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 		logger.Error("Failed to create file upload activity", "error", err)
 		return nil, err
 	}
+
+	defer func() {
+		// Cleanup original file
+		err := workflow.ExecuteActivity(
+			ctx,
+			"FileCleanupActivity",
+			activities.FileCleanupActivityInput{
+				FilePath: DownloadActivityOutput.FilePath,
+			},
+		).Get(ctx, nil)
+		if err != nil {
+			logger.Error("Failed to cleanup original file", "error", err)
+		}
+
+		// Only cleanup the second file if it's a different file
+		if fileCompressionActivityOutput.FilePath != DownloadActivityOutput.FilePath {
+			err = workflow.ExecuteActivity(
+				ctx,
+				"FileCleanupActivity",
+				activities.FileCleanupActivityInput{
+					FilePath: fileCompressionActivityOutput.FilePath,
+				},
+			).Get(ctx, nil)
+			if err != nil {
+				logger.Error("Failed to cleanup compressed file", "error", err)
+			}
+		}
+	}()
 
 	////////////////////////////////////////
 	// 7. Confirm backup via API: POST /jobs/:job_id/backups/:backup_id/confirm
