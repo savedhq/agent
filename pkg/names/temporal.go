@@ -6,6 +6,7 @@ const (
 	WorkflowNameSFTP   = "sftp"
 	WorkflowNameWebDAV = "webdav"
 	WorkflowNameNFS    = "nfs"
+	WorkflowNameGit    = "git"
 	// Databases
 	WorkflowNameMongoDB    = "mongodb"
 	WorkflowNamePostgreSQL = "postgres"
@@ -51,4 +52,6 @@ const (
 	ActivityNameCalculateArchiveUsage = "CalculateArchiveUsageActivity"
 	ActivityNameCheckLowBalance       = "CheckLowBalanceActivity"
 	ActivityNameFileUploadS3          = "FileUploadS3Activity"
+	ActivityNameGitClone              = "GitCloneActivity"
+	ActivityNameCleanup               = "CleanupActivity"
 )
