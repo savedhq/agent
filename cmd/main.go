@@ -73,7 +73,6 @@ func main() {
 	})
 
 	var c temporalclient.Client
-	var err error
 
 	for i := 0; i < hubConfig.MaxReconnectAttempts; i++ {
 		dialCtx, cancel := context.WithTimeout(ctx, hubConfig.ConnectionTimeout)
