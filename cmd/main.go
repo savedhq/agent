@@ -75,12 +75,15 @@ func main() {
 
 	// Register workflows (same names as backend)
 	w.RegisterWorkflowWithOptions(workflows.HTTPBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameHTTP})
+	w.RegisterWorkflowWithOptions(workflows.GitBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameGit})
 
 	// Create activities instance with dependency injection
 	acts := activities.NewActivities(cfg, authService, *hubConfig)
 
 	// Register activities
 	w.RegisterActivityWithOptions(acts.BackupRequestActivity, activity.RegisterOptions{Name: names.ActivityNameBackupRequest})
+	w.RegisterActivityWithOptions(acts.GitCloneActivity, activity.RegisterOptions{Name: names.ActivityNameGitClone})
+	w.RegisterActivityWithOptions(acts.CleanupActivity, activity.RegisterOptions{Name: names.ActivityNameCleanup})
 	w.RegisterActivityWithOptions(acts.BackupUploadActivity, activity.RegisterOptions{Name: names.ActivityNameBackupUpload})
 	w.RegisterActivityWithOptions(acts.BackupConfirmActivity, activity.RegisterOptions{Name: names.ActivityNameBackupConfirm})
 	w.RegisterActivityWithOptions(acts.FileCompressionActivity, activity.RegisterOptions{Name: names.ActivityNameCompressFile})
