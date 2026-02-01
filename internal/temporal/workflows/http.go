@@ -88,19 +88,33 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 	////////////////////////////////////////
 	// 4. Compress + encrypt file
 	////////////////////////////////////////
-	//var FileCompressionActivityOutput activities.FileCompressionActivityOutput
-	//err = workflow.ExecuteActivity(
-	//	ctx,
-	//	"FileCompressionActivity",
-	//	activities.FileCompressionActivityInput{},
-	//).Get(ctx, &FileCompressionActivityOutput)
+	var compressedFilePath string
+	if GetJobActivityOutput.Job.Compression.Enabled {
+		var compressionOutput activities.FileCompressionActivityOutput
+		err = workflow.ExecuteActivity(ctx, "FileCompressionActivity",
+			activities.FileCompressionActivityInput{FilePath: DownloadActivityOutput.FilePath, Provider: GetJobActivityOutput.Job.Compression.Algorithm}).Get(ctx, &compressionOutput)
+		if err != nil {
+			return nil, err
+		}
+		compressedFilePath = compressionOutput.FilePath
+		workflow.ExecuteActivity(ctx, "FileCleanupActivity", activities.FileCleanupActivityInput{FilePath: DownloadActivityOutput.FilePath}).Get(ctx, nil)
+	} else {
+		compressedFilePath = DownloadActivityOutput.FilePath
+	}
 
-	//var FileEncryptionActivityOutput activities.FileEncryptionActivityOutput
-	//err = workflow.ExecuteActivity(
-	//	ctx,
-	//	"FileEncryptionActivity",
-	//	activities.FileEncryptionActivityInput{},
-	//).Get(ctx, &FileEncryptionActivityOutput)
+	var encryptedFilePath string
+	if GetJobActivityOutput.Job.Encryption.Enabled {
+		var encryptionOutput activities.FileEncryptionActivityOutput
+		err = workflow.ExecuteActivity(ctx, "FileEncryptionActivity",
+			activities.FileEncryptionActivityInput{FilePath: compressedFilePath, Provider: "", Key: GetJobActivityOutput.Job.Encryption.PublicKey}).Get(ctx, &encryptionOutput)
+		if err != nil {
+			return nil, err
+		}
+		encryptedFilePath = encryptionOutput.FilePath
+		workflow.ExecuteActivity(ctx, "FileCleanupActivity", activities.FileCleanupActivityInput{FilePath: compressedFilePath}).Get(ctx, nil)
+	} else {
+		encryptedFilePath = compressedFilePath
+	}
 
 	////////////////////////////////////////
 	// 5. Request upload URL via API: POST /jobs/:job_id/backups/:backup_id/upload
@@ -132,11 +146,12 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 		ctx,
 		"FileUploadS3Activity",
 		activities.FileUploadS3ActivityInput{
-			FilePath:  DownloadActivityOutput.FilePath,
+			FilePath:  encryptedFilePath,
 			UploadURL: BackupUploadActivityOutput.UploadURL,
 			ExpiresAt: BackupUploadActivityOutput.ExpiresAt,
 		},
 	).Get(ctx, FileUploadS3ActivityOutput)
+	defer workflow.ExecuteActivity(ctx, "FileCleanupActivity", activities.FileCleanupActivityInput{FilePath: encryptedFilePath}).Get(ctx, nil)
 	if err != nil {
 		logger.Error("Failed to create file upload activity", "error", err)
 		return nil, err

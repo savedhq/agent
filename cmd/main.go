@@ -75,6 +75,7 @@ func main() {
 
 	// Register workflows (same names as backend)
 	w.RegisterWorkflowWithOptions(workflows.HTTPBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameHTTP})
+	w.RegisterWorkflowWithOptions(workflows.PostgreSQLBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNamePostgreSQL})
 
 	// Create activities instance with dependency injection
 	acts := activities.NewActivities(cfg, authService, *hubConfig)
@@ -88,6 +89,8 @@ func main() {
 	w.RegisterActivityWithOptions(acts.FileEncryptionActivity, activity.RegisterOptions{Name: names.ActivityNameEncryptFile})
 	w.RegisterActivityWithOptions(acts.GetJobActivity, activity.RegisterOptions{Name: names.ActivityNameGetJob})
 	w.RegisterActivityWithOptions(acts.FileUploadS3Activity, activity.RegisterOptions{Name: names.ActivityNameFileUploadS3})
+	w.RegisterActivityWithOptions(acts.PostgreSQLDumpActivity, activity.RegisterOptions{Name: names.ActivityNamePostgreSQLDump})
+	w.RegisterActivityWithOptions(acts.FileCleanupActivity, activity.RegisterOptions{Name: names.ActivityNameFileCleanup})
 
 	log.Printf("Loaded %d jobs from config", len(cfg.Jobs))
 	for _, job := range cfg.Jobs {

@@ -7,9 +7,12 @@ import (
 )
 
 type FileCompressionActivityInput struct {
+	FilePath string `json:"file_path"`
+	Provider string `json:"provider"`
 }
 
 type FileCompressionActivityOutput struct {
+	FilePath string `json:"file_path"`
 }
 
 func (a *Activities) FileCompressionActivity(ctx context.Context, input FileCompressionActivityInput) (*FileCompressionActivityOutput, error) {
