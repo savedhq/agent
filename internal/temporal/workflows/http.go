@@ -95,12 +95,19 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 	//	activities.FileCompressionActivityInput{},
 	//).Get(ctx, &FileCompressionActivityOutput)
 
-	//var FileEncryptionActivityOutput activities.FileEncryptionActivityOutput
-	//err = workflow.ExecuteActivity(
-	//	ctx,
-	//	"FileEncryptionActivity",
-	//	activities.FileEncryptionActivityInput{},
-	//).Get(ctx, &FileEncryptionActivityOutput)
+	var FileEncryptionActivityOutput activities.FileEncryptionActivityOutput
+	err = workflow.ExecuteActivity(
+		ctx,
+		"FileEncryptionActivity",
+		activities.FileEncryptionActivityInput{
+			FilePath: DownloadActivityOutput.FilePath,
+			Key:      GetJobActivityOutput.Job.Encryption.Key,
+		},
+	).Get(ctx, &FileEncryptionActivityOutput)
+	if err != nil {
+		logger.Error("Failed to encrypt file", "error", err)
+		return nil, err
+	}
 
 	////////////////////////////////////////
 	// 5. Request upload URL via API: POST /jobs/:job_id/backups/:backup_id/upload
@@ -112,9 +119,9 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 		activities.BackupUploadActivityInput{
 			JobId:    input.JobId,
 			BackupId: BackupRequestActivityOutput.ID.String(),
-			FilePath: DownloadActivityOutput.FilePath,
-			Size:     DownloadActivityOutput.Size,
-			Checksum: DownloadActivityOutput.Checksum,
+			FilePath: FileEncryptionActivityOutput.FilePath,
+			Size:     FileEncryptionActivityOutput.Size,
+			Checksum: FileEncryptionActivityOutput.Checksum,
 			Name:     DownloadActivityOutput.Name,
 			MimeType: DownloadActivityOutput.MimeType,
 		},
