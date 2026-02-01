@@ -26,7 +26,8 @@ func main() {
 	// Load config from file
 	cfg, err := config.NewConfig(ctx, "")
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		// Can't use logger here because it's not initialized yet
+		panic(err)
 	}
 
 	authService := auth.NewAuthService(&cfg.Auth)
@@ -66,6 +67,8 @@ func main() {
 
 	defer c.Close()
 
+	// NOTE: Unable to determine the correct way to configure a custom logger for the Temporal worker.
+	// The code will compile and run with the default logger, but the Temporal worker logs will not be structured.
 	workerOptions := worker.Options{
 		EnableSessionWorker: true,
 	}

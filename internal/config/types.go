@@ -32,3 +32,13 @@ type UploadURLResponse struct {
 type ConfirmResponse struct {
 	Status string `json:"status"`
 }
+
+// LogConfig represents the logging configuration
+type LogConfig struct {
+	Level      string `mapstructure:"level"`
+	Path       string `mapstructure:"path"`
+	MaxSize    int    `mapstructure:"max_size"`
+	MaxBackups int    `mapstructure:"max_backups"`
+	MaxAge     int    `mapstructure:"max_age"`
+	Compress   bool   `mapstructure:"compress"`
+}
