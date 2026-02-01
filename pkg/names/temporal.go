@@ -51,4 +51,10 @@ const (
 	ActivityNameCalculateArchiveUsage = "CalculateArchiveUsageActivity"
 	ActivityNameCheckLowBalance       = "CheckLowBalanceActivity"
 	ActivityNameFileUploadS3          = "FileUploadS3Activity"
+
+	// IMAP Activities
+	ActivityNameIMAPConnect    = "IMAPConnectActivity"
+	ActivityNameIMAPDownload   = "IMAPDownloadActivity"
+	ActivityNameIMAPUpload     = "IMAPUploadActivity"
+	ActivityNameIMAPDisconnect = "IMAPDisconnectActivity"
 )
