@@ -16,6 +16,7 @@ type Config struct {
 	TempDir string     `mapstructure:"temp_dir"`
 	Auth    AuthConfig `mapstructure:"auth"`
 	Jobs    []job.Job  `mapstructure:"jobs"`
+	Log     LogConfig  `mapstructure:"log"`
 }
 
 // tempConfig is used for initial Viper unmarshaling with map configs
@@ -24,6 +25,7 @@ type tempConfig struct {
 	TempDir string     `mapstructure:"temp_dir"`
 	Auth    AuthConfig `mapstructure:"auth"`
 	Jobs    []tempJob  `mapstructure:"jobs"`
+	Log     LogConfig  `mapstructure:"log"`
 }
 
 // tempJob is used for initial unmarshaling before converting to typed config
@@ -40,6 +42,14 @@ type tempJob struct {
 func NewConfig(ctx context.Context, configPath string) (*Config, error) {
 	// Set default values matching config.yaml
 	viper.SetDefault("api", "")
+
+	// Log configuration defaults
+	viper.SetDefault("log.level", "info")
+	viper.SetDefault("log.path", "stdout")
+	viper.SetDefault("log.max_size", 5)
+	viper.SetDefault("log.max_backups", 3)
+	viper.SetDefault("log.max_age", 28)
+	viper.SetDefault("log.compress", true)
 
 	// Auth configuration defaults
 	viper.SetDefault("auth.server", "")
@@ -83,6 +93,7 @@ func NewConfig(ctx context.Context, configPath string) (*Config, error) {
 		TempDir: temp.TempDir,
 		Auth:    temp.Auth,
 		Jobs:    make([]job.Job, len(temp.Jobs)),
+		Log:     temp.Log,
 	}
 
 	// Convert each job's map config to typed config

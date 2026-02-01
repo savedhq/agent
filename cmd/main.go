@@ -7,10 +7,12 @@ import (
 	"agent/internal/temporal/workflows"
 	"agent/pkg"
 	"agent/pkg/names"
+	"agent/pkg/log"
 	"context"
 	"crypto/tls"
-	"log"
+	"os"
 
+	"github.com/rs/zerolog"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/contrib/envconfig"
 	"go.temporal.io/sdk/workflow"
@@ -26,15 +28,19 @@ func main() {
 	// Load config from file
 	cfg, err := config.NewConfig(ctx, "")
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		// Can't use logger here because it's not initialized yet
+		panic(err)
 	}
+
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	logger := log.New(cfg.Log)
 
 	authService := auth.NewAuthService(&cfg.Auth)
 
 	// Fetch hub configuration from API
 	hubConfig, err := pkg.LoadHubConfig(ctx, authService, cfg)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		logger.Fatal().Err(err).Msg("Failed to load hub config")
 	}
 
 	clientOptions := envconfig.MustLoadDefaultClientOptions()
@@ -60,14 +66,15 @@ func main() {
 	c, err := temporalclient.DialContext(ctx, clientOptions)
 
 	if err != nil {
-		log.Fatalln("Unable to create Temporal client", err)
+		logger.Fatal().Err(err).Msg("Unable to create Temporal client")
 	}
-	log.Printf("Connected to workspace: %s, queue: %s", hubConfig.Workspace, hubConfig.Queue)
+	logger.Info().Str("workspace", hubConfig.Workspace).Str("queue", hubConfig.Queue).Msg("Connected to workspace")
 
 	defer c.Close()
 
 	workerOptions := worker.Options{
 		EnableSessionWorker: true,
+		Logger:              log.NewTemporalAdapter(logger),
 	}
 
 	// Create worker
@@ -89,15 +96,15 @@ func main() {
 	w.RegisterActivityWithOptions(acts.GetJobActivity, activity.RegisterOptions{Name: names.ActivityNameGetJob})
 	w.RegisterActivityWithOptions(acts.FileUploadS3Activity, activity.RegisterOptions{Name: names.ActivityNameFileUploadS3})
 
-	log.Printf("Loaded %d jobs from config", len(cfg.Jobs))
+	logger.Info().Int("count", len(cfg.Jobs)).Msg("Loaded jobs from config")
 	for _, job := range cfg.Jobs {
-		log.Println("Adding job", job.ID, job.Provider)
+		logger.Info().Str("jobId", job.ID.String()).Str("provider", string(job.Provider)).Msg("Adding job")
 	}
 
 	// Start listening to the Task Queue.
 	err = w.Run(worker.InterruptCh())
 	if err != nil {
-		log.Fatalln("unable to start Worker", err)
+		logger.Fatal().Err(err).Msg("Unable to start Worker")
 	}
 
 }
