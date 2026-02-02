@@ -37,16 +37,15 @@ func MySQLBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) error
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
 	// 1. Get job config
-	var jobDetails activities.GetJobActivityOutput
-	err = workflow.ExecuteActivity(ctx, names.ActivityNameGetJob, activities.GetJobActivityInput{JobId: input.JobId}).Get(ctx, &jobDetails)
+	var jobConfig job.Job
+	err = workflow.ExecuteActivity(ctx, names.ActivityNameGetJob, activities.GetJobActivityInput{JobId: input.JobId}).Get(ctx, &jobConfig)
 	if err != nil {
 		return fmt.Errorf("failed to get job config: %w", err)
 	}
-	jobConfig := jobDetails.Job
 
 	// 2. Request backup from backend
 	var backupReq activities.BackupRequestActivityOutput
-	err = workflow.ExecuteActivity(ctx, names.ActivityNameBackupRequest, activities.BackupRequestActivityInput{Job: jobConfig}).Get(ctx, &backupReq)
+	err = workflow.ExecuteActivity(ctx, names.ActivityNameBackupRequest, activities.BackupRequestActivityInput{Job: &jobConfig}).Get(ctx, &backupReq)
 	if err != nil {
 		return fmt.Errorf("failed to request backup: %w", err)
 	}
@@ -54,7 +53,7 @@ func MySQLBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) error
 
 	// Create a temporary directory for the backup
 	var tempDirOutput activities.CreateTempDirOutput
-	err = workflow.ExecuteActivity(ctx, "CreateTempDirActivity", activities.CreateTempDirInput{Pattern: "mysql-backup-", BaseDir: jobDetails.TempDir}).Get(ctx, &tempDirOutput)
+	err = workflow.ExecuteActivity(ctx, "CreateTempDirActivity", activities.CreateTempDirInput{Pattern: "mysql-backup-"}).Get(ctx, &tempDirOutput)
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}

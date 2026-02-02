@@ -13,8 +13,7 @@ type GetJobActivityInput struct {
 }
 
 type GetJobActivityOutput struct {
-	Job     *job.Job
-	TempDir string
+	Job *job.Job
 }
 
 func (a *Activities) GetJobActivity(ctx context.Context, input GetJobActivityInput) (*GetJobActivityOutput, error) {
@@ -22,7 +21,6 @@ func (a *Activities) GetJobActivity(ctx context.Context, input GetJobActivityInp
 	logger.Debug("GetJobActivity called", "jobId", input.JobId)
 
 	result := new(GetJobActivityOutput)
-	result.TempDir = a.Config.TempDir
 
 	// Find job in config by ID
 	for i := range a.Config.Jobs {

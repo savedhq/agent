@@ -11,8 +11,6 @@ import (
 	"go.temporal.io/sdk/activity"
 )
 
-const BackupDir = "/backup"
-
 type MySQLDumpInput struct {
 	ConnectionString string
 	OutputPath       string
@@ -27,7 +25,7 @@ func (a *Activities) MySQLDumpActivity(ctx context.Context, input MySQLDumpInput
 	log.Info("running mysqldump")
 
 	// Ensure the output directory exists
-	if err := os.MkdirAll(BackupDir, 0755); err != nil {
+	if err := os.MkdirAll(a.Config.TempDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
