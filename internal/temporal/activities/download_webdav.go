@@ -185,7 +185,9 @@ func downloadDir(client *http.Client, urlString, dest, username, password string
 	for _, res := range ms.Responses {
 		hrefURL, err := url.Parse(res.Href)
 		if err != nil {
-			return err // Or log and continue
+			// Log the error and continue with the next file
+			fmt.Fprintf(os.Stderr, "failed to parse href %q: %v\n", res.Href, err)
+			continue
 		}
 
 		resolvedURL := baseURL.ResolveReference(hrefURL)
