@@ -51,4 +51,6 @@ const (
 	ActivityNameCalculateArchiveUsage = "CalculateArchiveUsageActivity"
 	ActivityNameCheckLowBalance       = "CheckLowBalanceActivity"
 	ActivityNameFileUploadS3          = "FileUploadS3Activity"
+	ActivityNameDownloadWebDAV        = "DownloadWebDAVActivity"
+	ActivityNameCleanup               = "CleanupActivity"
 )

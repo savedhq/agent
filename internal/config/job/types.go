@@ -3,6 +3,11 @@ package job
 // JobProvider represents the type of backup provider
 type JobProvider string
 
+const (
+	// JobProviderWebDAV represents a WebDAV backup provider
+	JobProviderWebDAV JobProvider = "webdav"
+)
+
 // JobConfig is the interface that all provider-specific configs must implement
 type JobConfig interface {
 	Validate() error
