@@ -10,6 +10,7 @@ import (
 
 type CreateTempDirInput struct {
 	Pattern string
+	BaseDir string
 }
 
 type CreateTempDirOutput struct {
@@ -20,7 +21,7 @@ func (a *Activities) CreateTempDirActivity(ctx context.Context, input CreateTemp
 	log := activity.GetLogger(ctx)
 	log.Info("creating temp directory")
 
-	path, err := os.MkdirTemp("", input.Pattern)
+	path, err := os.MkdirTemp(input.BaseDir, input.Pattern)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp directory: %w", err)
 	}
