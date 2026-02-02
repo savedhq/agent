@@ -6,8 +6,13 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"go.temporal.io/sdk/activity"
 )
 
@@ -74,4 +79,107 @@ func (a *Activities) FileUploadS3Activity(ctx context.Context, input FileUploadS
 
 	logger.Info("File uploaded successfully to S3")
 	return result, nil
+}
+
+type SyncS3BucketActivityInput struct {
+	SourceRegion          string `json:"source_region"`
+	SourceBucket          string `json:"source_bucket"`
+	SourcePath            string `json:"source_path"`
+	SourceAccessKeyID     string `json:"source_access_key_id"`
+	SourceSecretAccessKey string `json:"source_secret_access_key"`
+	SourceEndpoint        string `json:"source_endpoint"`
+	DestRegion          string `json:"dest_region"`
+	DestBucket          string `json:"dest_bucket"`
+	DestPath            string `json:"dest_path"`
+	DestAccessKeyID     string `json:"dest_access_key_id"`
+	DestSecretAccessKey string `json:"dest_secret_access_key"`
+	DestEndpoint        string `json:"dest_endpoint"`
+}
+
+type SyncS3BucketActivityOutput struct {
+	Status bool `json:"status"`
+}
+
+func (a *Activities) SyncS3BucketActivity(ctx context.Context, input SyncS3BucketActivityInput) (*SyncS3BucketActivityOutput, error) {
+	logger := activity.GetLogger(ctx)
+	logger.Info("SyncS3BucketActivity started")
+
+	// Create a new S3 client for the source bucket
+	sourceS3Client, err := newS3Client(input.SourceRegion, input.SourceEndpoint, input.SourceAccessKeyID, input.SourceSecretAccessKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create source S3 client: %w", err)
+	}
+
+	// Create a new S3 client for the destination bucket
+	destS3Client, err := newS3Client(input.DestRegion, input.DestEndpoint, input.DestAccessKeyID, input.DestSecretAccessKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create destination S3 client: %w", err)
+	}
+
+	// List all objects in the source bucket
+	listObjectsInput := &s3.ListObjectsV2Input{
+		Bucket: &input.SourceBucket,
+		Prefix: &input.SourcePath,
+	}
+
+	paginator := s3.NewListObjectsV2Paginator(sourceS3Client, listObjectsInput)
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list objects in source bucket: %w", err)
+		}
+
+		for _, obj := range page.Contents {
+			sourceObjectKey := *obj.Key
+
+			// Correctly format the CopySource parameter
+			copySource := fmt.Sprintf("%s/%s", input.SourceBucket, sourceObjectKey)
+
+			// Correctly calculate the destination object key
+			relativeKey, err := filepath.Rel(input.SourcePath, sourceObjectKey)
+			if err != nil {
+				logger.Error("failed to calculate relative path", "error", err, "sourcePath", input.SourcePath, "objectKey", sourceObjectKey)
+				return nil, fmt.Errorf("failed to calculate relative path for object: %w", err)
+			}
+			destObjectKey := filepath.Join(input.DestPath, relativeKey)
+
+			// Copy the object from the source to the destination bucket
+			_, err = destS3Client.CopyObject(ctx, &s3.CopyObjectInput{
+				Bucket:     &input.DestBucket,
+				CopySource: &copySource,
+				Key:        &destObjectKey,
+			})
+			if err != nil {
+				logger.Error("failed to copy object", "error", err, "objectKey", sourceObjectKey)
+				return nil, fmt.Errorf("failed to copy object: %w", err)
+			}
+		}
+	}
+
+
+	result := &SyncS3BucketActivityOutput{
+		Status: true,
+	}
+
+	logger.Info("S3 bucket sync completed successfully")
+	return result, nil
+}
+
+func newS3Client(region, endpoint, accessKeyID, secretAccessKey string) (*s3.Client, error) {
+	cfg, err := config.LoadDefaultConfig(context.Background(),
+		config.WithRegion(region),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, "")),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	if endpoint != "" {
+		cfg.EndpointResolverWithOptions = aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+			return aws.Endpoint{URL: endpoint}, nil
+		})
+	}
+
+	return s3.NewFromConfig(cfg), nil
 }

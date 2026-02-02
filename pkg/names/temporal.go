@@ -15,6 +15,7 @@ const (
 	WorkflowNameRedis      = "redis"
 	WorkflowNameCassandra  = "cassandra"
 	// Cloud Storage
+	WorkflowNameAWSS3Backup = "aws.s3.backup"
 	WorkflowNameAWSS3       = "aws.s3"
 	WorkflowNameAWSDynamoDB = "aws.dynamodb"
 	// Email
@@ -51,4 +52,5 @@ const (
 	ActivityNameCalculateArchiveUsage = "CalculateArchiveUsageActivity"
 	ActivityNameCheckLowBalance       = "CheckLowBalanceActivity"
 	ActivityNameFileUploadS3          = "FileUploadS3Activity"
+	ActivityNameSyncS3Bucket          = "SyncS3BucketActivity"
 )
