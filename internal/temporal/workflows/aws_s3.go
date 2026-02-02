@@ -40,10 +40,9 @@ func AWSS3BackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*AWS
 		return nil, err
 	}
 
-	s3Config, ok := GetJobActivityOutput.Job.Config.(*job.AWSS3Config)
-	if !ok {
-		err := temporal.NewApplicationError("invalid job config type", "INVALID_CONFIG_TYPE")
-		logger.Error("Failed to cast job config to AWSS3Config", "error", err)
+	s3Config, err := job.LoadAs[*job.AWSS3Config](GetJobActivityOutput.Job)
+	if err != nil {
+		logger.Error("Failed to load S3 config", "error", err)
 		return nil, err
 	}
 
