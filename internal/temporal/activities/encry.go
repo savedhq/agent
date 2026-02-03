@@ -7,9 +7,12 @@ import (
 )
 
 type FileEncryptionActivityInput struct {
+	InputPath  string
+	OutputPath string
 }
 
 type FileEncryptionActivityOutput struct {
+	OutputPath string
 }
 
 func (a *Activities) FileEncryptionActivity(ctx context.Context, input FileEncryptionActivityInput) (*FileEncryptionActivityOutput, error) {

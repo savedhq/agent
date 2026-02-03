@@ -37,9 +37,12 @@ const (
 	// Activity Names
 	ActivityNameBackupRequest         = "BackupRequestActivity"
 	ActivityNameBackupUpload          = "BackupUploadActivity"
+	ActivityNameMySQLDump             = "MySQLDumpActivity"
 	ActivityNameBackupConfirm         = "BackupConfirmActivity"
 	ActivityNameCompressFile          = "CompressFileActivity"
 	ActivityNameEncryptFile           = "EncryptFileActivity"
+	ActivityNameCreateTempDir         = "CreateTempDirActivity"
+	ActivityNameRemoveFile            = "RemoveFileActivity"
 	ActivityNameDownload              = "DownloadActivity"
 	ActivityNameGetJob                = "GetJobActivity"
 	ActivityNameS3Upload              = "S3UploadActivity"

@@ -7,9 +7,12 @@ import (
 )
 
 type FileCompressionActivityInput struct {
+	InputPath  string
+	OutputPath string
 }
 
 type FileCompressionActivityOutput struct {
+	OutputPath string
 }
 
 func (a *Activities) FileCompressionActivity(ctx context.Context, input FileCompressionActivityInput) (*FileCompressionActivityOutput, error) {
