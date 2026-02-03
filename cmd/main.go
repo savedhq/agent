@@ -78,7 +78,7 @@ func main() {
 	w.RegisterWorkflowWithOptions(workflows.MySQLBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameMySQL})
 
 	// Create activities instance with dependency injection
-	acts := activities.NewActivities(cfg, authService, *hubConfig)
+	acts := activities.NewActivities(cfg, authService, *hubConfig, c)
 
 	// Register activities
 	w.RegisterActivityWithOptions(acts.BackupRequestActivity, activity.RegisterOptions{Name: names.ActivityNameBackupRequest})
