@@ -51,6 +51,6 @@ const (
 	ActivityNameReportUsageMetrics    = "ReportUsageMetricsActivity"
 	ActivityNameCalculateArchiveUsage = "CalculateArchiveUsageActivity"
 	ActivityNameCheckLowBalance       = "CheckLowBalanceActivity"
-	ActivityNameFileUploadS3          = "FileUploadS3Activity"
-	ActivityNameSyncS3Bucket          = "SyncS3BucketActivity"
+	ActivityNameFileUploadS3 = "FileUploadS3Activity"
+	ActivityNameS3Download   = "S3DownloadActivity"
 )

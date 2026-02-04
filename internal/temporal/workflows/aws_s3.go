@@ -1,7 +1,6 @@
 package workflows
 
 import (
-	"agent/internal/config/job"
 	"agent/internal/temporal/activities"
 	"time"
 
@@ -29,47 +28,82 @@ func AWSS3BackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*AWS
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
-	GetJobActivityOutput := new(activities.GetJobActivityOutput)
-	activity := workflow.ExecuteActivity(
-		ctx,
-		"GetJobActivity",
+	// 1. Get job details
+	getJobOutput := new(activities.GetJobActivityOutput)
+	err := workflow.ExecuteActivity(ctx, "GetJobActivity",
 		activities.GetJobActivityInput{JobId: input.JobId},
-	)
-	if err := activity.Get(ctx, GetJobActivityOutput); err != nil {
+	).Get(ctx, getJobOutput)
+	if err != nil {
 		logger.Error("Failed to get job details", "error", err)
 		return nil, err
 	}
 
-	s3Config, err := job.LoadAs[*job.AWSS3Config](GetJobActivityOutput.Job)
+	// 2. Create backup request
+	backupReqOutput := new(activities.BackupRequestActivityOutput)
+	err = workflow.ExecuteActivity(ctx, "BackupRequestActivity",
+		activities.BackupRequestActivityInput{Job: getJobOutput.Job},
+	).Get(ctx, backupReqOutput)
 	if err != nil {
-		logger.Error("Failed to load S3 config", "error", err)
+		logger.Error("Failed to create backup request", "error", err)
 		return nil, err
 	}
 
-	SyncS3BucketActivityOutput := new(activities.SyncS3BucketActivityOutput)
-	err := workflow.ExecuteActivity(
-		ctx,
-		"SyncS3BucketActivity",
-		activities.SyncS3BucketActivityInput{
-			SourceRegion:          s3Config.Source.Region,
-			SourceBucket:          s3Config.Source.Bucket,
-			SourcePath:            s3Config.Source.Path,
-			SourceAccessKeyID:     s3Config.Source.AccessKeyID,
-			SourceSecretAccessKey: s3Config.Source.SecretAccessKey,
-			SourceEndpoint:        s3Config.Source.Endpoint,
-			DestRegion:          s3Config.Destination.Region,
-			DestBucket:          s3Config.Destination.Bucket,
-			DestPath:            s3Config.Destination.Path,
-			DestAccessKeyID:     s3Config.Destination.AccessKeyID,
-			DestSecretAccessKey: s3Config.Destination.SecretAccessKey,
-			DestEndpoint:        s3Config.Destination.Endpoint,
+	// 3. Download from S3
+	downloadOutput := new(activities.S3DownloadActivityOutput)
+	err = workflow.ExecuteActivity(ctx, "S3DownloadActivity",
+		activities.S3DownloadActivityInput{Job: getJobOutput.Job},
+	).Get(ctx, downloadOutput)
+	if err != nil {
+		logger.Error("S3 download failed", "error", err)
+		return nil, err
+	}
+
+	// 4. Request upload URL
+	uploadOutput := new(activities.BackupUploadActivityOutput)
+	err = workflow.ExecuteActivity(ctx, "BackupUploadActivity",
+		activities.BackupUploadActivityInput{
+			JobId:    input.JobId,
+			BackupId: backupReqOutput.ID.String(),
+			FilePath: downloadOutput.FilePath,
+			Size:     downloadOutput.Size,
+			Checksum: downloadOutput.Checksum,
+			Name:     downloadOutput.Name,
+			MimeType: downloadOutput.MimeType,
 		},
-	).Get(ctx, SyncS3BucketActivityOutput)
+	).Get(ctx, uploadOutput)
 	if err != nil {
-		logger.Error("Failed to sync S3 bucket", "error", err)
+		logger.Error("Failed to get upload URL", "error", err)
 		return nil, err
 	}
 
+	// 5. Upload to S3 via presigned URL
+	fileUploadOutput := new(activities.FileUploadS3ActivityOutput)
+	err = workflow.ExecuteActivity(ctx, "FileUploadS3Activity",
+		activities.FileUploadS3ActivityInput{
+			FilePath:  downloadOutput.FilePath,
+			UploadURL: uploadOutput.UploadURL,
+			ExpiresAt: uploadOutput.ExpiresAt,
+		},
+	).Get(ctx, fileUploadOutput)
+	if err != nil {
+		logger.Error("Failed to upload file", "error", err)
+		return nil, err
+	}
+
+	// 6. Confirm backup
 	result.Status = true
+	confirmOutput := new(activities.BackupConfirmActivityOutput)
+	err = workflow.ExecuteActivity(ctx, "BackupConfirmActivity",
+		activities.BackupConfirmActivityInput{
+			JobId:    input.JobId,
+			BackupId: backupReqOutput.ID.String(),
+			Status:   result.Status,
+		},
+	).Get(ctx, confirmOutput)
+	if err != nil {
+		logger.Error("Failed to confirm backup", "error", err)
+		return nil, err
+	}
+
 	return result, nil
 }

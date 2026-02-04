@@ -82,7 +82,7 @@ func main() {
 
 	// Register activities
 	w.RegisterActivityWithOptions(acts.BackupRequestActivity, activity.RegisterOptions{Name: names.ActivityNameBackupRequest})
-	w.RegisterActivityWithOptions(acts.SyncS3BucketActivity, activity.RegisterOptions{Name: names.ActivityNameSyncS3Bucket})
+	w.RegisterActivityWithOptions(acts.S3DownloadActivity, activity.RegisterOptions{Name: names.ActivityNameS3Download})
 	w.RegisterActivityWithOptions(acts.BackupUploadActivity, activity.RegisterOptions{Name: names.ActivityNameBackupUpload})
 	w.RegisterActivityWithOptions(acts.BackupConfirmActivity, activity.RegisterOptions{Name: names.ActivityNameBackupConfirm})
 	w.RegisterActivityWithOptions(acts.FileCompressionActivity, activity.RegisterOptions{Name: names.ActivityNameCompressFile})
