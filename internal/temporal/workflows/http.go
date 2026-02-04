@@ -85,25 +85,54 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 
 	logger.Info("Download completed", "filePath", DownloadActivityOutput.FilePath, "size", DownloadActivityOutput.Size)
 	result.Status = true
-	////////////////////////////////////////
-	// 4. Compress + encrypt file
-	////////////////////////////////////////
-	//var FileCompressionActivityOutput activities.FileCompressionActivityOutput
-	//err = workflow.ExecuteActivity(
-	//	ctx,
-	//	"FileCompressionActivity",
-	//	activities.FileCompressionActivityInput{},
-	//).Get(ctx, &FileCompressionActivityOutput)
 
-	//var FileEncryptionActivityOutput activities.FileEncryptionActivityOutput
-	//err = workflow.ExecuteActivity(
-	//	ctx,
-	//	"FileEncryptionActivity",
-	//	activities.FileEncryptionActivityInput{},
-	//).Get(ctx, &FileEncryptionActivityOutput)
+	// Track file path through compression/encryption
+	filePath := DownloadActivityOutput.FilePath
 
 	////////////////////////////////////////
-	// 5. Request upload URL via API: POST /jobs/:job_id/backups/:backup_id/upload
+	// 4. Compress file (if enabled)
+	////////////////////////////////////////
+	if GetJobActivityOutput.Job.Compression.Enabled {
+		FileCompressionActivityOutput := new(activities.FileCompressionActivityOutput)
+		err = workflow.ExecuteActivity(
+			ctx,
+			"FileCompressionActivity",
+			activities.FileCompressionActivityInput{
+				InputPath:  filePath,
+				OutputPath: filePath + ".gz",
+			},
+		).Get(ctx, FileCompressionActivityOutput)
+		if err != nil {
+			logger.Error("Failed to compress file", "error", err)
+			return nil, err
+		}
+		filePath = FileCompressionActivityOutput.OutputPath
+		logger.Info("Compression completed", "filePath", filePath)
+	}
+
+	////////////////////////////////////////
+	// 5. Encrypt file (if enabled)
+	////////////////////////////////////////
+	if GetJobActivityOutput.Job.Encryption.Enabled {
+		FileEncryptionActivityOutput := new(activities.FileEncryptionActivityOutput)
+		err = workflow.ExecuteActivity(
+			ctx,
+			"FileEncryptionActivity",
+			activities.FileEncryptionActivityInput{
+				InputPath:  filePath,
+				OutputPath: filePath + ".enc",
+			},
+		).Get(ctx, FileEncryptionActivityOutput)
+		if err != nil {
+			logger.Error("Failed to encrypt file", "error", err)
+			return nil, err
+		}
+		filePath = FileEncryptionActivityOutput.OutputPath
+		logger.Info("Encryption completed", "filePath", filePath)
+	}
+
+	////////////////////////////////////////
+	// 6. Request upload URL via API: POST /jobs/:job_id/backups/:backup_id/upload
 	////////////////////////////////////////
 	BackupUploadActivityOutput := new(activities.BackupUploadActivityOutput)
 	err = workflow.ExecuteActivity(
@@ -112,7 +141,7 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 		activities.BackupUploadActivityInput{
 			JobId:    input.JobId,
 			BackupId: BackupRequestActivityOutput.ID.String(),
-			FilePath: DownloadActivityOutput.FilePath,
+			FilePath: filePath,
 			Size:     DownloadActivityOutput.Size,
 			Checksum: DownloadActivityOutput.Checksum,
 			Name:     DownloadActivityOutput.Name,
@@ -125,14 +154,14 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 	}
 
 	////////////////////////////////////////
-	// 6. Upload to S3 using presigned URL
+	// 7. Upload to S3 using presigned URL
 	////////////////////////////////////////
 	FileUploadS3ActivityOutput := new(activities.FileUploadS3ActivityOutput)
 	err = workflow.ExecuteActivity(
 		ctx,
 		"FileUploadS3Activity",
 		activities.FileUploadS3ActivityInput{
-			FilePath:  DownloadActivityOutput.FilePath,
+			FilePath:  filePath,
 			UploadURL: BackupUploadActivityOutput.UploadURL,
 			ExpiresAt: BackupUploadActivityOutput.ExpiresAt,
 		},
@@ -143,7 +172,7 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 	}
 
 	////////////////////////////////////////
-	// 7. Confirm backup via API: POST /jobs/:job_id/backups/:backup_id/confirm
+	// 8. Confirm backup via API: POST /jobs/:job_id/backups/:backup_id/confirm
 	////////////////////////////////////////
 	BackupConfirmActivityOutput := new(activities.BackupConfirmActivityOutput)
 	err = workflow.ExecuteActivity(

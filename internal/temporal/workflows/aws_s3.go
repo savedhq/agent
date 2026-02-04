@@ -8,15 +8,16 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-type AWSS3BackupWorkflowOutput struct {
+type AWSS3BackupOutput struct {
 	Status bool
 }
 
-func AWSS3BackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*AWSS3BackupWorkflowOutput, error) {
+func AWSS3BackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*AWSS3BackupOutput, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("AWSS3BackupWorkflow started", "jobId", input.JobId)
+	logger.Info("AWSS3BackupWorkflow started", "Provider", input.Provider)
 
-	result := new(AWSS3BackupWorkflowOutput)
+	result := new(AWSS3BackupOutput)
 	ao := workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -28,80 +29,159 @@ func AWSS3BackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*AWS
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
-	// 1. Get job details
-	getJobOutput := new(activities.GetJobActivityOutput)
-	err := workflow.ExecuteActivity(ctx, "GetJobActivity",
+	////////////////////////////////////////
+	// 1. Get job details from config.yaml
+	////////////////////////////////////////
+	GetJobActivityOutput := new(activities.GetJobActivityOutput)
+
+	activity := workflow.ExecuteActivity(
+		ctx,
+		"GetJobActivity",
 		activities.GetJobActivityInput{JobId: input.JobId},
-	).Get(ctx, getJobOutput)
-	if err != nil {
+	)
+	if err := activity.Get(ctx, GetJobActivityOutput); err != nil {
 		logger.Error("Failed to get job details", "error", err)
 		return nil, err
 	}
 
-	// 2. Create backup request
-	backupReqOutput := new(activities.BackupRequestActivityOutput)
-	err = workflow.ExecuteActivity(ctx, "BackupRequestActivity",
-		activities.BackupRequestActivityInput{Job: getJobOutput.Job},
-	).Get(ctx, backupReqOutput)
+	logger.Info("Job details fetched", "jobId", input.JobId, "provider", input.Provider)
+
+	////////////////////////////////////////
+	// 2. Create backup entity via API: POST /jobs/:job_id/request
+	////////////////////////////////////////
+	BackupRequestActivityOutput := new(activities.BackupRequestActivityOutput)
+
+	err := workflow.ExecuteActivity(
+		ctx,
+		"BackupRequestActivity",
+		activities.BackupRequestActivityInput{Job: GetJobActivityOutput.Job},
+	).Get(ctx, BackupRequestActivityOutput)
 	if err != nil {
 		logger.Error("Failed to create backup request", "error", err)
 		return nil, err
 	}
 
-	// 3. Download from S3
-	downloadOutput := new(activities.S3DownloadActivityOutput)
-	err = workflow.ExecuteActivity(ctx, "S3DownloadActivity",
-		activities.S3DownloadActivityInput{Job: getJobOutput.Job},
-	).Get(ctx, downloadOutput)
+	logger.Info("Backup created successfully", "backupID", BackupRequestActivityOutput.ID.String())
+
+	////////////////////////////////////////
+	// 3. Download file from S3 source
+	////////////////////////////////////////
+	S3DownloadActivityOutput := new(activities.S3DownloadActivityOutput)
+	err = workflow.ExecuteActivity(
+		ctx,
+		"S3DownloadActivity",
+		activities.S3DownloadActivityInput{
+			Job: GetJobActivityOutput.Job,
+		},
+	).Get(ctx, S3DownloadActivityOutput)
 	if err != nil {
 		logger.Error("S3 download failed", "error", err)
 		return nil, err
 	}
 
-	// 4. Request upload URL
-	uploadOutput := new(activities.BackupUploadActivityOutput)
-	err = workflow.ExecuteActivity(ctx, "BackupUploadActivity",
+	logger.Info("Download completed", "filePath", S3DownloadActivityOutput.FilePath, "size", S3DownloadActivityOutput.Size)
+	result.Status = true
+
+	// Track file path through compression/encryption
+	filePath := S3DownloadActivityOutput.FilePath
+
+	////////////////////////////////////////
+	// 4. Compress file (if enabled)
+	////////////////////////////////////////
+	if GetJobActivityOutput.Job.Compression.Enabled {
+		FileCompressionActivityOutput := new(activities.FileCompressionActivityOutput)
+		err = workflow.ExecuteActivity(
+			ctx,
+			"FileCompressionActivity",
+			activities.FileCompressionActivityInput{
+				InputPath:  filePath,
+				OutputPath: filePath + ".gz",
+			},
+		).Get(ctx, FileCompressionActivityOutput)
+		if err != nil {
+			logger.Error("Failed to compress file", "error", err)
+			return nil, err
+		}
+		filePath = FileCompressionActivityOutput.OutputPath
+		logger.Info("Compression completed", "filePath", filePath)
+	}
+
+	////////////////////////////////////////
+	// 5. Encrypt file (if enabled)
+	////////////////////////////////////////
+	if GetJobActivityOutput.Job.Encryption.Enabled {
+		FileEncryptionActivityOutput := new(activities.FileEncryptionActivityOutput)
+		err = workflow.ExecuteActivity(
+			ctx,
+			"FileEncryptionActivity",
+			activities.FileEncryptionActivityInput{
+				InputPath:  filePath,
+				OutputPath: filePath + ".enc",
+			},
+		).Get(ctx, FileEncryptionActivityOutput)
+		if err != nil {
+			logger.Error("Failed to encrypt file", "error", err)
+			return nil, err
+		}
+		filePath = FileEncryptionActivityOutput.OutputPath
+		logger.Info("Encryption completed", "filePath", filePath)
+	}
+
+	////////////////////////////////////////
+	// 6. Request upload URL via API: POST /jobs/:job_id/backups/:backup_id/upload
+	////////////////////////////////////////
+	BackupUploadActivityOutput := new(activities.BackupUploadActivityOutput)
+	err = workflow.ExecuteActivity(
+		ctx,
+		"BackupUploadActivity",
 		activities.BackupUploadActivityInput{
 			JobId:    input.JobId,
-			BackupId: backupReqOutput.ID.String(),
-			FilePath: downloadOutput.FilePath,
-			Size:     downloadOutput.Size,
-			Checksum: downloadOutput.Checksum,
-			Name:     downloadOutput.Name,
-			MimeType: downloadOutput.MimeType,
+			BackupId: BackupRequestActivityOutput.ID.String(),
+			FilePath: filePath,
+			Size:     S3DownloadActivityOutput.Size,
+			Checksum: S3DownloadActivityOutput.Checksum,
+			Name:     S3DownloadActivityOutput.Name,
+			MimeType: S3DownloadActivityOutput.MimeType,
 		},
-	).Get(ctx, uploadOutput)
+	).Get(ctx, BackupUploadActivityOutput)
 	if err != nil {
-		logger.Error("Failed to get upload URL", "error", err)
+		logger.Error("Failed to create backup upload activity", "error", err)
 		return nil, err
 	}
 
-	// 5. Upload to S3 via presigned URL
-	fileUploadOutput := new(activities.FileUploadS3ActivityOutput)
-	err = workflow.ExecuteActivity(ctx, "FileUploadS3Activity",
+	////////////////////////////////////////
+	// 7. Upload to S3 using presigned URL
+	////////////////////////////////////////
+	FileUploadS3ActivityOutput := new(activities.FileUploadS3ActivityOutput)
+	err = workflow.ExecuteActivity(
+		ctx,
+		"FileUploadS3Activity",
 		activities.FileUploadS3ActivityInput{
-			FilePath:  downloadOutput.FilePath,
-			UploadURL: uploadOutput.UploadURL,
-			ExpiresAt: uploadOutput.ExpiresAt,
+			FilePath:  filePath,
+			UploadURL: BackupUploadActivityOutput.UploadURL,
+			ExpiresAt: BackupUploadActivityOutput.ExpiresAt,
 		},
-	).Get(ctx, fileUploadOutput)
+	).Get(ctx, FileUploadS3ActivityOutput)
 	if err != nil {
-		logger.Error("Failed to upload file", "error", err)
+		logger.Error("Failed to create file upload activity", "error", err)
 		return nil, err
 	}
 
-	// 6. Confirm backup
-	result.Status = true
-	confirmOutput := new(activities.BackupConfirmActivityOutput)
-	err = workflow.ExecuteActivity(ctx, "BackupConfirmActivity",
+	////////////////////////////////////////
+	// 8. Confirm backup via API: POST /jobs/:job_id/backups/:backup_id/confirm
+	////////////////////////////////////////
+	BackupConfirmActivityOutput := new(activities.BackupConfirmActivityOutput)
+	err = workflow.ExecuteActivity(
+		ctx,
+		"BackupConfirmActivity",
 		activities.BackupConfirmActivityInput{
 			JobId:    input.JobId,
-			BackupId: backupReqOutput.ID.String(),
+			BackupId: BackupRequestActivityOutput.ID.String(),
 			Status:   result.Status,
 		},
-	).Get(ctx, confirmOutput)
+	).Get(ctx, BackupConfirmActivityOutput)
 	if err != nil {
-		logger.Error("Failed to confirm backup", "error", err)
+		logger.Error("Failed to create backup confirm activity", "error", err)
 		return nil, err
 	}
 
