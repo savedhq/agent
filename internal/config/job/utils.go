@@ -12,6 +12,7 @@ var configFactories = map[JobProvider]func() JobConfig{
 	JobProviderAWSS3:         func() JobConfig { return new(AWSS3Config) },
 	JobProviderGoogleDrive:   func() JobConfig { return new(GoogleDriveConfig) },
 	JobProvideriCloudStorage: func() JobConfig { return new(ICloudStorageConfig) },
+	JobProviderGmail:         func() JobConfig { return new(GmailConfig) },
 }
 
 // NewConfig creates a new empty config for the given provider

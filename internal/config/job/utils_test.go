@@ -96,6 +96,21 @@ func TestJobMarshalUnmarshalMultipleProviders(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Gmail",
+			job: Job{
+				ID:       "gmail-job",
+				Provider: JobProviderGmail,
+				Config: &GmailConfig{
+					Email:        "user@gmail.com",
+					ClientID:     "client123",
+					ClientSecret: "secret123",
+					RefreshToken: "refresh123",
+					Format:       "mbox",
+					Query:        "label:important",
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
