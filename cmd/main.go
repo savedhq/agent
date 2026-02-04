@@ -75,6 +75,7 @@ func main() {
 
 	// Register workflows (same names as backend)
 	w.RegisterWorkflowWithOptions(workflows.HTTPBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameHTTP})
+	w.RegisterWorkflowWithOptions(workflows.AWSS3BackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameAWSS3Backup})
 	w.RegisterWorkflowWithOptions(workflows.MySQLBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameMySQL})
 
 	// Create activities instance with dependency injection
@@ -82,6 +83,7 @@ func main() {
 
 	// Register activities
 	w.RegisterActivityWithOptions(acts.BackupRequestActivity, activity.RegisterOptions{Name: names.ActivityNameBackupRequest})
+	w.RegisterActivityWithOptions(acts.S3DownloadActivity, activity.RegisterOptions{Name: names.ActivityNameS3Download})
 	w.RegisterActivityWithOptions(acts.BackupUploadActivity, activity.RegisterOptions{Name: names.ActivityNameBackupUpload})
 	w.RegisterActivityWithOptions(acts.BackupConfirmActivity, activity.RegisterOptions{Name: names.ActivityNameBackupConfirm})
 	w.RegisterActivityWithOptions(acts.FileCompressionActivity, activity.RegisterOptions{Name: names.ActivityNameCompressFile})

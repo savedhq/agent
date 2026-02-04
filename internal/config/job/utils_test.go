@@ -90,8 +90,9 @@ func TestJobMarshalUnmarshalMultipleProviders(t *testing.T) {
 				ID:       "s3-job",
 				Provider: JobProviderAWSS3,
 				Config: &AWSS3Config{
-					Bucket: "my-bucket",
+					Bucket: "my-source-bucket",
 					Region: "us-west-2",
+					Path:   "backups/data.zip",
 				},
 			},
 		},

@@ -8,6 +8,7 @@ import (
 	"agent/internal/config/job"
 	"agent/internal/temporal/activities"
 	"agent/pkg/names"
+
 	"go.temporal.io/sdk/workflow"
 )
 
