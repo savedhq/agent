@@ -78,6 +78,7 @@ func main() {
 	w.RegisterWorkflowWithOptions(workflows.PostgreSQLBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNamePostgreSQL})
 	w.RegisterWorkflowWithOptions(workflows.AWSS3BackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameAWSS3Backup})
 	w.RegisterWorkflowWithOptions(workflows.MySQLBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameMySQL})
+	w.RegisterWorkflowWithOptions(workflows.GmailBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameGmail})
 
 	// Create activities instance with dependency injection
 	acts := activities.NewActivities(cfg, authService, *hubConfig, c)
@@ -95,6 +96,8 @@ func main() {
 	w.RegisterActivityWithOptions(acts.PostgreSQLDumpActivity, activity.RegisterOptions{Name: names.ActivityNamePostgreSQLDump})
 	w.RegisterActivityWithOptions(acts.FileCleanupActivity, activity.RegisterOptions{Name: names.ActivityNameFileCleanup})
 	w.RegisterActivityWithOptions(acts.MySQLDumpActivity, activity.RegisterOptions{Name: names.ActivityNameMySQLDump})
+	w.RegisterActivityWithOptions(acts.GmailExportActivity, activity.RegisterOptions{Name: names.ActivityNameGmailExport})
+	w.RegisterActivityWithOptions(acts.FileMetadataActivity, activity.RegisterOptions{Name: names.ActivityNameFileMetadata})
 	w.RegisterActivityWithOptions(acts.CreateTempDirActivity, activity.RegisterOptions{Name: names.ActivityNameCreateTempDir})
 	w.RegisterActivityWithOptions(acts.RemoveFileActivity, activity.RegisterOptions{Name: names.ActivityNameRemoveFile})
 

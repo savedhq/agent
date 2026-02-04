@@ -58,4 +58,6 @@ const (
 	ActivityNamePostgreSQLDump        = "PostgreSQLDumpActivity"
 	ActivityNameFileCleanup           = "FileCleanupActivity"
 	ActivityNameS3Download            = "S3DownloadActivity"
+	ActivityNameGmailExport           = "GmailExportActivity"
+	ActivityNameFileMetadata          = "FileMetadataActivity"
 )
