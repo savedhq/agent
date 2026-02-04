@@ -76,12 +76,15 @@ func main() {
 	// Register workflows (same names as backend)
 	w.RegisterWorkflowWithOptions(workflows.HTTPBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameHTTP})
 	w.RegisterWorkflowWithOptions(workflows.PostgreSQLBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNamePostgreSQL})
+	w.RegisterWorkflowWithOptions(workflows.AWSS3BackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameAWSS3Backup})
+	w.RegisterWorkflowWithOptions(workflows.MySQLBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameMySQL})
 
 	// Create activities instance with dependency injection
-	acts := activities.NewActivities(cfg, authService, *hubConfig)
+	acts := activities.NewActivities(cfg, authService, *hubConfig, c)
 
 	// Register activities
 	w.RegisterActivityWithOptions(acts.BackupRequestActivity, activity.RegisterOptions{Name: names.ActivityNameBackupRequest})
+	w.RegisterActivityWithOptions(acts.S3DownloadActivity, activity.RegisterOptions{Name: names.ActivityNameS3Download})
 	w.RegisterActivityWithOptions(acts.BackupUploadActivity, activity.RegisterOptions{Name: names.ActivityNameBackupUpload})
 	w.RegisterActivityWithOptions(acts.BackupConfirmActivity, activity.RegisterOptions{Name: names.ActivityNameBackupConfirm})
 	w.RegisterActivityWithOptions(acts.FileCompressionActivity, activity.RegisterOptions{Name: names.ActivityNameCompressFile})
@@ -91,6 +94,9 @@ func main() {
 	w.RegisterActivityWithOptions(acts.FileUploadS3Activity, activity.RegisterOptions{Name: names.ActivityNameFileUploadS3})
 	w.RegisterActivityWithOptions(acts.PostgreSQLDumpActivity, activity.RegisterOptions{Name: names.ActivityNamePostgreSQLDump})
 	w.RegisterActivityWithOptions(acts.FileCleanupActivity, activity.RegisterOptions{Name: names.ActivityNameFileCleanup})
+	w.RegisterActivityWithOptions(acts.MySQLDumpActivity, activity.RegisterOptions{Name: names.ActivityNameMySQLDump})
+	w.RegisterActivityWithOptions(acts.CreateTempDirActivity, activity.RegisterOptions{Name: names.ActivityNameCreateTempDir})
+	w.RegisterActivityWithOptions(acts.RemoveFileActivity, activity.RegisterOptions{Name: names.ActivityNameRemoveFile})
 
 	log.Printf("Loaded %d jobs from config", len(cfg.Jobs))
 	for _, job := range cfg.Jobs {

@@ -9,20 +9,16 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-// HTTPBackupOutput defines the output for HTTP backup workflow
-type HTTPBackupOutput struct {
+type AWSS3BackupOutput struct {
 	Status bool
 }
 
-// HTTPBackupWorkflow performs HTTP backup for agent jobs
-// Agent runs on client systems and uses REST API to communicate with backend
-func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTPBackupOutput, error) {
+func AWSS3BackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*AWSS3BackupOutput, error) {
 	logger := workflow.GetLogger(ctx)
-	logger.Info("HTTPBackupWorkflow started", "jobId", input.JobId)
-	logger.Info("HTTPBackupWorkflow started", "Provider", input.Provider)
+	logger.Info("AWSS3BackupWorkflow started", "jobId", input.JobId)
+	logger.Info("AWSS3BackupWorkflow started", "Provider", input.Provider)
 
-	result := new(HTTPBackupOutput)
-	// Activity options - match backend worker settings
+	result := new(AWSS3BackupOutput)
 	ao := workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -69,56 +65,72 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 	logger.Info("Backup created successfully", "backupID", BackupRequestActivityOutput.ID.String())
 
 	////////////////////////////////////////
-	// 3. Download file from HTTP source
+	// 3. Download file from S3 source
 	////////////////////////////////////////
-	DownloadActivityOutput := new(activities.DownloadActivityOutput)
+	S3DownloadActivityOutput := new(activities.S3DownloadActivityOutput)
 	err = workflow.ExecuteActivity(
 		ctx,
-		names.ActivityNameDownload,
-		activities.DownloadActivityInput{
+		names.ActivityNameS3Download,
+		activities.S3DownloadActivityInput{
 			Job: GetJobActivityOutput.Job,
 		},
-	).Get(ctx, DownloadActivityOutput)
+	).Get(ctx, S3DownloadActivityOutput)
 	if err != nil {
-		logger.Error("HTTP download failed", "error", err)
+		logger.Error("S3 download failed", "error", err)
 		return nil, err
 	}
 
-	logger.Info("Download completed", "filePath", DownloadActivityOutput.FilePath, "size", DownloadActivityOutput.Size)
+	logger.Info("Download completed", "filePath", S3DownloadActivityOutput.FilePath, "size", S3DownloadActivityOutput.Size)
 	result.Status = true
+
+	// Track file path through compression/encryption
+	filePath := S3DownloadActivityOutput.FilePath
+
 	////////////////////////////////////////
-	// 4. Compress + encrypt file
+	// 4. Compress file (if enabled)
 	////////////////////////////////////////
-	var compressedFilePath string
 	if GetJobActivityOutput.Job.Compression.Enabled {
-		var compressionOutput activities.FileCompressionActivityOutput
-		err = workflow.ExecuteActivity(ctx, names.ActivityNameCompressFile,
-			activities.FileCompressionActivityInput{FilePath: DownloadActivityOutput.FilePath, Provider: GetJobActivityOutput.Job.Compression.Algorithm}).Get(ctx, &compressionOutput)
+		FileCompressionActivityOutput := new(activities.FileCompressionActivityOutput)
+		err = workflow.ExecuteActivity(
+			ctx,
+			names.ActivityNameCompressFile,
+			activities.FileCompressionActivityInput{
+				FilePath: filePath,
+				Provider: GetJobActivityOutput.Job.Compression.Algorithm,
+			},
+		).Get(ctx, FileCompressionActivityOutput)
 		if err != nil {
+			logger.Error("Failed to compress file", "error", err)
 			return nil, err
 		}
-		compressedFilePath = compressionOutput.FilePath
-		workflow.ExecuteActivity(ctx, names.ActivityNameFileCleanup, activities.FileCleanupActivityInput{FilePath: DownloadActivityOutput.FilePath}).Get(ctx, nil)
-	} else {
-		compressedFilePath = DownloadActivityOutput.FilePath
-	}
-
-	var encryptedFilePath string
-	if GetJobActivityOutput.Job.Encryption.Enabled {
-		var encryptionOutput activities.FileEncryptionActivityOutput
-		err = workflow.ExecuteActivity(ctx, names.ActivityNameEncryptFile,
-			activities.FileEncryptionActivityInput{FilePath: compressedFilePath, Provider: GetJobActivityOutput.Job.Encryption.Algorithm, Key: GetJobActivityOutput.Job.Encryption.PublicKey}).Get(ctx, &encryptionOutput)
-		if err != nil {
-			return nil, err
-		}
-		encryptedFilePath = encryptionOutput.FilePath
-		workflow.ExecuteActivity(ctx, names.ActivityNameFileCleanup, activities.FileCleanupActivityInput{FilePath: compressedFilePath}).Get(ctx, nil)
-	} else {
-		encryptedFilePath = compressedFilePath
+		filePath = FileCompressionActivityOutput.FilePath
+		logger.Info("Compression completed", "filePath", filePath)
 	}
 
 	////////////////////////////////////////
-	// 5. Request upload URL via API: POST /jobs/:job_id/backups/:backup_id/upload
+	// 5. Encrypt file (if enabled)
+	////////////////////////////////////////
+	if GetJobActivityOutput.Job.Encryption.Enabled {
+		FileEncryptionActivityOutput := new(activities.FileEncryptionActivityOutput)
+		err = workflow.ExecuteActivity(
+			ctx,
+			names.ActivityNameEncryptFile,
+			activities.FileEncryptionActivityInput{
+				FilePath: filePath,
+				Provider: GetJobActivityOutput.Job.Encryption.Algorithm,
+				Key:      GetJobActivityOutput.Job.Encryption.PublicKey,
+			},
+		).Get(ctx, FileEncryptionActivityOutput)
+		if err != nil {
+			logger.Error("Failed to encrypt file", "error", err)
+			return nil, err
+		}
+		filePath = FileEncryptionActivityOutput.FilePath
+		logger.Info("Encryption completed", "filePath", filePath)
+	}
+
+	////////////////////////////////////////
+	// 6. Request upload URL via API: POST /jobs/:job_id/backups/:backup_id/upload
 	////////////////////////////////////////
 	BackupUploadActivityOutput := new(activities.BackupUploadActivityOutput)
 	err = workflow.ExecuteActivity(
@@ -127,11 +139,11 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 		activities.BackupUploadActivityInput{
 			JobId:    input.JobId,
 			BackupId: BackupRequestActivityOutput.ID.String(),
-			FilePath: DownloadActivityOutput.FilePath,
-			Size:     DownloadActivityOutput.Size,
-			Checksum: DownloadActivityOutput.Checksum,
-			Name:     DownloadActivityOutput.Name,
-			MimeType: DownloadActivityOutput.MimeType,
+			FilePath: filePath,
+			Size:     S3DownloadActivityOutput.Size,
+			Checksum: S3DownloadActivityOutput.Checksum,
+			Name:     S3DownloadActivityOutput.Name,
+			MimeType: S3DownloadActivityOutput.MimeType,
 		},
 	).Get(ctx, BackupUploadActivityOutput)
 	if err != nil {
@@ -140,26 +152,25 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 	}
 
 	////////////////////////////////////////
-	// 6. Upload to S3 using presigned URL
+	// 7. Upload to S3 using presigned URL
 	////////////////////////////////////////
 	FileUploadS3ActivityOutput := new(activities.FileUploadS3ActivityOutput)
 	err = workflow.ExecuteActivity(
 		ctx,
 		names.ActivityNameFileUploadS3,
 		activities.FileUploadS3ActivityInput{
-			FilePath:  encryptedFilePath,
+			FilePath:  filePath,
 			UploadURL: BackupUploadActivityOutput.UploadURL,
 			ExpiresAt: BackupUploadActivityOutput.ExpiresAt,
 		},
 	).Get(ctx, FileUploadS3ActivityOutput)
-	workflow.ExecuteActivity(ctx, names.ActivityNameFileCleanup, activities.FileCleanupActivityInput{FilePath: encryptedFilePath}).Get(ctx, nil)
 	if err != nil {
 		logger.Error("Failed to create file upload activity", "error", err)
 		return nil, err
 	}
 
 	////////////////////////////////////////
-	// 7. Confirm backup via API: POST /jobs/:job_id/backups/:backup_id/confirm
+	// 8. Confirm backup via API: POST /jobs/:job_id/backups/:backup_id/confirm
 	////////////////////////////////////////
 	BackupConfirmActivityOutput := new(activities.BackupConfirmActivityOutput)
 	err = workflow.ExecuteActivity(
@@ -177,5 +188,4 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 	}
 
 	return result, nil
-
 }

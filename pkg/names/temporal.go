@@ -15,6 +15,7 @@ const (
 	WorkflowNameRedis      = "redis"
 	WorkflowNameCassandra  = "cassandra"
 	// Cloud Storage
+	WorkflowNameAWSS3Backup = "aws.s3.backup"
 	WorkflowNameAWSS3       = "aws.s3"
 	WorkflowNameAWSDynamoDB = "aws.dynamodb"
 	// Email
@@ -37,9 +38,12 @@ const (
 	// Activity Names
 	ActivityNameBackupRequest         = "BackupRequestActivity"
 	ActivityNameBackupUpload          = "BackupUploadActivity"
+	ActivityNameMySQLDump             = "MySQLDumpActivity"
 	ActivityNameBackupConfirm         = "BackupConfirmActivity"
 	ActivityNameCompressFile          = "CompressFileActivity"
 	ActivityNameEncryptFile           = "EncryptFileActivity"
+	ActivityNameCreateTempDir         = "CreateTempDirActivity"
+	ActivityNameRemoveFile            = "RemoveFileActivity"
 	ActivityNameDownload              = "DownloadActivity"
 	ActivityNameGetJob                = "GetJobActivity"
 	ActivityNameS3Upload              = "S3UploadActivity"
@@ -53,4 +57,5 @@ const (
 	ActivityNameFileUploadS3          = "FileUploadS3Activity"
 	ActivityNamePostgreSQLDump        = "PostgreSQLDumpActivity"
 	ActivityNameFileCleanup           = "FileCleanupActivity"
+	ActivityNameS3Download            = "S3DownloadActivity"
 )
