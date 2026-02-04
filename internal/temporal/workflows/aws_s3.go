@@ -2,6 +2,7 @@ package workflows
 
 import (
 	"agent/internal/temporal/activities"
+	"agent/pkg/names"
 	"time"
 
 	"go.temporal.io/sdk/temporal"
@@ -36,7 +37,7 @@ func AWSS3BackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*AWS
 
 	activity := workflow.ExecuteActivity(
 		ctx,
-		"GetJobActivity",
+		names.ActivityNameGetJob,
 		activities.GetJobActivityInput{JobId: input.JobId},
 	)
 	if err := activity.Get(ctx, GetJobActivityOutput); err != nil {
@@ -53,7 +54,7 @@ func AWSS3BackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*AWS
 
 	err := workflow.ExecuteActivity(
 		ctx,
-		"BackupRequestActivity",
+		names.ActivityNameBackupRequest,
 		activities.BackupRequestActivityInput{Job: GetJobActivityOutput.Job},
 	).Get(ctx, BackupRequestActivityOutput)
 	if err != nil {
@@ -69,7 +70,7 @@ func AWSS3BackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*AWS
 	S3DownloadActivityOutput := new(activities.S3DownloadActivityOutput)
 	err = workflow.ExecuteActivity(
 		ctx,
-		"S3DownloadActivity",
+		names.ActivityNameS3Download,
 		activities.S3DownloadActivityInput{
 			Job: GetJobActivityOutput.Job,
 		},
@@ -92,17 +93,17 @@ func AWSS3BackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*AWS
 		FileCompressionActivityOutput := new(activities.FileCompressionActivityOutput)
 		err = workflow.ExecuteActivity(
 			ctx,
-			"FileCompressionActivity",
+			names.ActivityNameCompressFile,
 			activities.FileCompressionActivityInput{
-				InputPath:  filePath,
-				OutputPath: filePath + ".gz",
+				FilePath: filePath,
+				Provider: GetJobActivityOutput.Job.Compression.Algorithm,
 			},
 		).Get(ctx, FileCompressionActivityOutput)
 		if err != nil {
 			logger.Error("Failed to compress file", "error", err)
 			return nil, err
 		}
-		filePath = FileCompressionActivityOutput.OutputPath
+		filePath = FileCompressionActivityOutput.FilePath
 		logger.Info("Compression completed", "filePath", filePath)
 	}
 
@@ -113,17 +114,18 @@ func AWSS3BackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*AWS
 		FileEncryptionActivityOutput := new(activities.FileEncryptionActivityOutput)
 		err = workflow.ExecuteActivity(
 			ctx,
-			"FileEncryptionActivity",
+			names.ActivityNameEncryptFile,
 			activities.FileEncryptionActivityInput{
-				InputPath:  filePath,
-				OutputPath: filePath + ".enc",
+				FilePath: filePath,
+				Provider: GetJobActivityOutput.Job.Encryption.Algorithm,
+				Key:      GetJobActivityOutput.Job.Encryption.PublicKey,
 			},
 		).Get(ctx, FileEncryptionActivityOutput)
 		if err != nil {
 			logger.Error("Failed to encrypt file", "error", err)
 			return nil, err
 		}
-		filePath = FileEncryptionActivityOutput.OutputPath
+		filePath = FileEncryptionActivityOutput.FilePath
 		logger.Info("Encryption completed", "filePath", filePath)
 	}
 
@@ -133,7 +135,7 @@ func AWSS3BackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*AWS
 	BackupUploadActivityOutput := new(activities.BackupUploadActivityOutput)
 	err = workflow.ExecuteActivity(
 		ctx,
-		"BackupUploadActivity",
+		names.ActivityNameBackupUpload,
 		activities.BackupUploadActivityInput{
 			JobId:    input.JobId,
 			BackupId: BackupRequestActivityOutput.ID.String(),
@@ -155,7 +157,7 @@ func AWSS3BackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*AWS
 	FileUploadS3ActivityOutput := new(activities.FileUploadS3ActivityOutput)
 	err = workflow.ExecuteActivity(
 		ctx,
-		"FileUploadS3Activity",
+		names.ActivityNameFileUploadS3,
 		activities.FileUploadS3ActivityInput{
 			FilePath:  filePath,
 			UploadURL: BackupUploadActivityOutput.UploadURL,
@@ -173,7 +175,7 @@ func AWSS3BackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*AWS
 	BackupConfirmActivityOutput := new(activities.BackupConfirmActivityOutput)
 	err = workflow.ExecuteActivity(
 		ctx,
-		"BackupConfirmActivity",
+		names.ActivityNameBackupConfirm,
 		activities.BackupConfirmActivityInput{
 			JobId:    input.JobId,
 			BackupId: BackupRequestActivityOutput.ID.String(),

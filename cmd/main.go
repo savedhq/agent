@@ -75,6 +75,7 @@ func main() {
 
 	// Register workflows (same names as backend)
 	w.RegisterWorkflowWithOptions(workflows.HTTPBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameHTTP})
+	w.RegisterWorkflowWithOptions(workflows.PostgreSQLBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNamePostgreSQL})
 	w.RegisterWorkflowWithOptions(workflows.AWSS3BackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameAWSS3Backup})
 	w.RegisterWorkflowWithOptions(workflows.MySQLBackupWorkflow, workflow.RegisterOptions{Name: names.WorkflowNameMySQL})
 
@@ -91,6 +92,8 @@ func main() {
 	w.RegisterActivityWithOptions(acts.FileEncryptionActivity, activity.RegisterOptions{Name: names.ActivityNameEncryptFile})
 	w.RegisterActivityWithOptions(acts.GetJobActivity, activity.RegisterOptions{Name: names.ActivityNameGetJob})
 	w.RegisterActivityWithOptions(acts.FileUploadS3Activity, activity.RegisterOptions{Name: names.ActivityNameFileUploadS3})
+	w.RegisterActivityWithOptions(acts.PostgreSQLDumpActivity, activity.RegisterOptions{Name: names.ActivityNamePostgreSQLDump})
+	w.RegisterActivityWithOptions(acts.FileCleanupActivity, activity.RegisterOptions{Name: names.ActivityNameFileCleanup})
 	w.RegisterActivityWithOptions(acts.MySQLDumpActivity, activity.RegisterOptions{Name: names.ActivityNameMySQLDump})
 	w.RegisterActivityWithOptions(acts.CreateTempDirActivity, activity.RegisterOptions{Name: names.ActivityNameCreateTempDir})
 	w.RegisterActivityWithOptions(acts.RemoveFileActivity, activity.RegisterOptions{Name: names.ActivityNameRemoveFile})

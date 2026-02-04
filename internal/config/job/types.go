@@ -12,6 +12,7 @@ type JobConfig interface {
 type EncryptionConfig struct {
 	Enabled   bool   `json:"enabled"`
 	PublicKey string `json:"public_key"`
+	Algorithm string `json:"algorithm"`
 }
 
 type CompressionConfig struct {

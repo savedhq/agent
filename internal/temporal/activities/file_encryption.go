@@ -7,12 +7,13 @@ import (
 )
 
 type FileEncryptionActivityInput struct {
-	InputPath  string
-	OutputPath string
+	FilePath string `json:"file_path"`
+	Provider string `json:"provider"`
+	Key      string `json:"key"`
 }
 
 type FileEncryptionActivityOutput struct {
-	OutputPath string
+	FilePath string `json:"file_path"`
 }
 
 func (a *Activities) FileEncryptionActivity(ctx context.Context, input FileEncryptionActivityInput) (*FileEncryptionActivityOutput, error) {

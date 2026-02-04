@@ -3,6 +3,8 @@ package workflows
 import (
 	"agent/internal/config/job"
 	"agent/internal/temporal/activities"
+	"agent/pkg/names"
+	"fmt"
 	"path/filepath"
 	"time"
 
@@ -31,18 +33,7 @@ func MySQLBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*MyS
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
-	// Track temp directory for cleanup
 	var tempDir string
-	defer func() {
-		if tempDir != "" {
-			RemoveFileActivityOutput := new(activities.RemoveFileOutput)
-			_ = workflow.ExecuteActivity(
-				ctx,
-				"RemoveFileActivity",
-				activities.RemoveFileInput{Path: tempDir},
-			).Get(ctx, RemoveFileActivityOutput)
-		}
-	}()
 
 	////////////////////////////////////////
 	// 1. Get job details from config.yaml
@@ -51,7 +42,7 @@ func MySQLBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*MyS
 
 	activity := workflow.ExecuteActivity(
 		ctx,
-		"GetJobActivity",
+		names.ActivityNameGetJob,
 		activities.GetJobActivityInput{JobId: input.JobId},
 	)
 	if err := activity.Get(ctx, GetJobActivityOutput); err != nil {
@@ -68,7 +59,7 @@ func MySQLBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*MyS
 
 	err := workflow.ExecuteActivity(
 		ctx,
-		"BackupRequestActivity",
+		names.ActivityNameBackupRequest,
 		activities.BackupRequestActivityInput{Job: GetJobActivityOutput.Job},
 	).Get(ctx, BackupRequestActivityOutput)
 	if err != nil {
@@ -84,7 +75,7 @@ func MySQLBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*MyS
 	CreateTempDirActivityOutput := new(activities.CreateTempDirOutput)
 	err = workflow.ExecuteActivity(
 		ctx,
-		"CreateTempDirActivity",
+		names.ActivityNameCreateTempDir,
 		activities.CreateTempDirInput{Pattern: "mysql-backup-"},
 	).Get(ctx, CreateTempDirActivityOutput)
 	if err != nil {
@@ -99,13 +90,13 @@ func MySQLBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*MyS
 	mysqlConfig, ok := GetJobActivityOutput.Job.Config.(*job.MySQLJobConfig)
 	if !ok {
 		logger.Error("Failed to assert mysql job config")
-		return nil, err
+		return nil, fmt.Errorf("failed to assert job config to MySQLJobConfig")
 	}
 
 	MySQLDumpActivityOutput := new(activities.MySQLDumpOutput)
 	err = workflow.ExecuteActivity(
 		ctx,
-		"MySQLDumpActivity",
+		names.ActivityNameMySQLDump,
 		activities.MySQLDumpInput{
 			ConnectionString: mysqlConfig.ConnectionString,
 			OutputPath:       filepath.Join(tempDir, BackupRequestActivityOutput.ID.String()),
@@ -127,17 +118,17 @@ func MySQLBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*MyS
 		FileCompressionActivityOutput := new(activities.FileCompressionActivityOutput)
 		err = workflow.ExecuteActivity(
 			ctx,
-			"FileCompressionActivity",
+			names.ActivityNameCompressFile,
 			activities.FileCompressionActivityInput{
-				InputPath:  filePath,
-				OutputPath: filePath + ".gz",
+				FilePath: filePath,
+				Provider: GetJobActivityOutput.Job.Compression.Algorithm,
 			},
 		).Get(ctx, FileCompressionActivityOutput)
 		if err != nil {
 			logger.Error("Failed to compress file", "error", err)
 			return nil, err
 		}
-		filePath = FileCompressionActivityOutput.OutputPath
+		filePath = FileCompressionActivityOutput.FilePath
 		logger.Info("Compression completed", "filePath", filePath)
 	}
 
@@ -148,17 +139,18 @@ func MySQLBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*MyS
 		FileEncryptionActivityOutput := new(activities.FileEncryptionActivityOutput)
 		err = workflow.ExecuteActivity(
 			ctx,
-			"FileEncryptionActivity",
+			names.ActivityNameEncryptFile,
 			activities.FileEncryptionActivityInput{
-				InputPath:  filePath,
-				OutputPath: filePath + ".enc",
+				FilePath: filePath,
+				Provider: GetJobActivityOutput.Job.Encryption.Algorithm,
+				Key:      GetJobActivityOutput.Job.Encryption.PublicKey,
 			},
 		).Get(ctx, FileEncryptionActivityOutput)
 		if err != nil {
 			logger.Error("Failed to encrypt file", "error", err)
 			return nil, err
 		}
-		filePath = FileEncryptionActivityOutput.OutputPath
+		filePath = FileEncryptionActivityOutput.FilePath
 		logger.Info("Encryption completed", "filePath", filePath)
 	}
 
@@ -168,7 +160,7 @@ func MySQLBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*MyS
 	BackupUploadActivityOutput := new(activities.BackupUploadActivityOutput)
 	err = workflow.ExecuteActivity(
 		ctx,
-		"BackupUploadActivity",
+		names.ActivityNameBackupUpload,
 		activities.BackupUploadActivityInput{
 			JobId:    input.JobId,
 			BackupId: BackupRequestActivityOutput.ID.String(),
@@ -186,7 +178,7 @@ func MySQLBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*MyS
 	FileUploadS3ActivityOutput := new(activities.FileUploadS3ActivityOutput)
 	err = workflow.ExecuteActivity(
 		ctx,
-		"FileUploadS3Activity",
+		names.ActivityNameFileUploadS3,
 		activities.FileUploadS3ActivityInput{
 			FilePath:  filePath,
 			UploadURL: BackupUploadActivityOutput.UploadURL,
@@ -204,7 +196,7 @@ func MySQLBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*MyS
 	BackupConfirmActivityOutput := new(activities.BackupConfirmActivityOutput)
 	err = workflow.ExecuteActivity(
 		ctx,
-		"BackupConfirmActivity",
+		names.ActivityNameBackupConfirm,
 		activities.BackupConfirmActivityInput{
 			JobId:    input.JobId,
 			BackupId: BackupRequestActivityOutput.ID.String(),

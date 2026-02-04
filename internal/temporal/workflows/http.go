@@ -2,6 +2,7 @@ package workflows
 
 import (
 	"agent/internal/temporal/activities"
+	"agent/pkg/names"
 	"time"
 
 	"go.temporal.io/sdk/temporal"
@@ -40,7 +41,7 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 
 	activity := workflow.ExecuteActivity(
 		ctx,
-		"GetJobActivity",
+		names.ActivityNameGetJob,
 		activities.GetJobActivityInput{JobId: input.JobId},
 	)
 	if err := activity.Get(ctx, GetJobActivityOutput); err != nil {
@@ -57,7 +58,7 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 
 	err := workflow.ExecuteActivity(
 		ctx,
-		"BackupRequestActivity",
+		names.ActivityNameBackupRequest,
 		activities.BackupRequestActivityInput{Job: GetJobActivityOutput.Job},
 	).Get(ctx, BackupRequestActivityOutput)
 	if err != nil {
@@ -73,7 +74,7 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 	DownloadActivityOutput := new(activities.DownloadActivityOutput)
 	err = workflow.ExecuteActivity(
 		ctx,
-		"DownloadActivity",
+		names.ActivityNameDownload,
 		activities.DownloadActivityInput{
 			Job: GetJobActivityOutput.Job,
 		},
@@ -85,63 +86,48 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 
 	logger.Info("Download completed", "filePath", DownloadActivityOutput.FilePath, "size", DownloadActivityOutput.Size)
 	result.Status = true
-
-	// Track file path through compression/encryption
-	filePath := DownloadActivityOutput.FilePath
-
 	////////////////////////////////////////
-	// 4. Compress file (if enabled)
+	// 4. Compress + encrypt file
 	////////////////////////////////////////
+	var compressedFilePath string
 	if GetJobActivityOutput.Job.Compression.Enabled {
-		FileCompressionActivityOutput := new(activities.FileCompressionActivityOutput)
-		err = workflow.ExecuteActivity(
-			ctx,
-			"FileCompressionActivity",
-			activities.FileCompressionActivityInput{
-				InputPath:  filePath,
-				OutputPath: filePath + ".gz",
-			},
-		).Get(ctx, FileCompressionActivityOutput)
+		var compressionOutput activities.FileCompressionActivityOutput
+		err = workflow.ExecuteActivity(ctx, names.ActivityNameCompressFile,
+			activities.FileCompressionActivityInput{FilePath: DownloadActivityOutput.FilePath, Provider: GetJobActivityOutput.Job.Compression.Algorithm}).Get(ctx, &compressionOutput)
 		if err != nil {
-			logger.Error("Failed to compress file", "error", err)
 			return nil, err
 		}
-		filePath = FileCompressionActivityOutput.OutputPath
-		logger.Info("Compression completed", "filePath", filePath)
+		compressedFilePath = compressionOutput.FilePath
+		workflow.ExecuteActivity(ctx, names.ActivityNameFileCleanup, activities.FileCleanupActivityInput{FilePath: DownloadActivityOutput.FilePath}).Get(ctx, nil)
+	} else {
+		compressedFilePath = DownloadActivityOutput.FilePath
 	}
 
-	////////////////////////////////////////
-	// 5. Encrypt file (if enabled)
-	////////////////////////////////////////
+	var encryptedFilePath string
 	if GetJobActivityOutput.Job.Encryption.Enabled {
-		FileEncryptionActivityOutput := new(activities.FileEncryptionActivityOutput)
-		err = workflow.ExecuteActivity(
-			ctx,
-			"FileEncryptionActivity",
-			activities.FileEncryptionActivityInput{
-				InputPath:  filePath,
-				OutputPath: filePath + ".enc",
-			},
-		).Get(ctx, FileEncryptionActivityOutput)
+		var encryptionOutput activities.FileEncryptionActivityOutput
+		err = workflow.ExecuteActivity(ctx, names.ActivityNameEncryptFile,
+			activities.FileEncryptionActivityInput{FilePath: compressedFilePath, Provider: GetJobActivityOutput.Job.Encryption.Algorithm, Key: GetJobActivityOutput.Job.Encryption.PublicKey}).Get(ctx, &encryptionOutput)
 		if err != nil {
-			logger.Error("Failed to encrypt file", "error", err)
 			return nil, err
 		}
-		filePath = FileEncryptionActivityOutput.OutputPath
-		logger.Info("Encryption completed", "filePath", filePath)
+		encryptedFilePath = encryptionOutput.FilePath
+		workflow.ExecuteActivity(ctx, names.ActivityNameFileCleanup, activities.FileCleanupActivityInput{FilePath: compressedFilePath}).Get(ctx, nil)
+	} else {
+		encryptedFilePath = compressedFilePath
 	}
 
 	////////////////////////////////////////
-	// 6. Request upload URL via API: POST /jobs/:job_id/backups/:backup_id/upload
+	// 5. Request upload URL via API: POST /jobs/:job_id/backups/:backup_id/upload
 	////////////////////////////////////////
 	BackupUploadActivityOutput := new(activities.BackupUploadActivityOutput)
 	err = workflow.ExecuteActivity(
 		ctx,
-		"BackupUploadActivity",
+		names.ActivityNameBackupUpload,
 		activities.BackupUploadActivityInput{
 			JobId:    input.JobId,
 			BackupId: BackupRequestActivityOutput.ID.String(),
-			FilePath: filePath,
+			FilePath: DownloadActivityOutput.FilePath,
 			Size:     DownloadActivityOutput.Size,
 			Checksum: DownloadActivityOutput.Checksum,
 			Name:     DownloadActivityOutput.Name,
@@ -154,30 +140,31 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) (*HTTP
 	}
 
 	////////////////////////////////////////
-	// 7. Upload to S3 using presigned URL
+	// 6. Upload to S3 using presigned URL
 	////////////////////////////////////////
 	FileUploadS3ActivityOutput := new(activities.FileUploadS3ActivityOutput)
 	err = workflow.ExecuteActivity(
 		ctx,
-		"FileUploadS3Activity",
+		names.ActivityNameFileUploadS3,
 		activities.FileUploadS3ActivityInput{
-			FilePath:  filePath,
+			FilePath:  encryptedFilePath,
 			UploadURL: BackupUploadActivityOutput.UploadURL,
 			ExpiresAt: BackupUploadActivityOutput.ExpiresAt,
 		},
 	).Get(ctx, FileUploadS3ActivityOutput)
+	workflow.ExecuteActivity(ctx, names.ActivityNameFileCleanup, activities.FileCleanupActivityInput{FilePath: encryptedFilePath}).Get(ctx, nil)
 	if err != nil {
 		logger.Error("Failed to create file upload activity", "error", err)
 		return nil, err
 	}
 
 	////////////////////////////////////////
-	// 8. Confirm backup via API: POST /jobs/:job_id/backups/:backup_id/confirm
+	// 7. Confirm backup via API: POST /jobs/:job_id/backups/:backup_id/confirm
 	////////////////////////////////////////
 	BackupConfirmActivityOutput := new(activities.BackupConfirmActivityOutput)
 	err = workflow.ExecuteActivity(
 		ctx,
-		"BackupConfirmActivity",
+		names.ActivityNameBackupConfirm,
 		activities.BackupConfirmActivityInput{
 			JobId:    input.JobId,
 			BackupId: BackupRequestActivityOutput.ID.String(),
