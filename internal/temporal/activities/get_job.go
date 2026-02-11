@@ -1,7 +1,7 @@
 package activities
 
 import (
-	"agent/internal/config/job"
+	"agent/internal/job"
 	"context"
 	"fmt"
 

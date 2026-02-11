@@ -1,4 +1,4 @@
-package auth
+package authentication
 
 import (
 	"agent/internal/config"
@@ -18,7 +18,7 @@ type auth0Service struct {
 	tokenExpiry time.Time
 }
 
-func NewAuthService(a *config.AuthConfig) AuthService {
+func NewAuth0Service(a *config.AuthConfig) AuthenticationService {
 	return &auth0Service{
 		AuthConfig: *a,
 	}

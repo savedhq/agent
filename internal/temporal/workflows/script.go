@@ -9,9 +9,9 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) error {
+func ScriptBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) error {
 	logger := workflow.GetLogger(ctx)
-	logger.Info("HTTPBackupWorkflow started", "jobId", input.JobId)
+	logger.Info("ScriptBackupWorkflow started", "jobId", input.JobId)
 
 	ao := workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Minute,
@@ -42,16 +42,25 @@ func HTTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) error 
 		return err
 	}
 
-	// 3. Download file
-	var dlOut activities.DownloadActivityOutput
-	err = workflow.ExecuteActivity(ctx, internal.ActivityNameDownload,
-		activities.DownloadActivityInput{Job: getJobOut.Job},
-	).Get(ctx, &dlOut)
+	// 3. Run script to generate backup file
+	var scriptOut activities.ScriptRunActivityOutput
+	err = workflow.ExecuteActivity(ctx, internal.ActivityNameScriptRun,
+		activities.ScriptRunActivityInput{Job: getJobOut.Job},
+	).Get(ctx, &scriptOut)
 	if err != nil {
 		return err
 	}
 
 	// 4-7. Compress → Encrypt → Upload → Confirm
-	return ProcessAndUpload(ctx, getJobOut.Job, input.JobId, backupOut.ID.String(),
-		dlOut.FilePath, dlOut.Size, dlOut.Checksum, dlOut.Name, dlOut.MimeType)
+	return ProcessAndUpload(
+		ctx,
+		getJobOut.Job,
+		input.JobId,
+		backupOut.ID.String(),
+		scriptOut.FilePath,
+		scriptOut.Size,
+		scriptOut.Checksum,
+		scriptOut.Name,
+		scriptOut.MimeType,
+	)
 }
