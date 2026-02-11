@@ -1,108 +1,101 @@
 package config
 
 import (
-	"agent/internal/config/job"
+	"agent/internal/job"
 	"context"
-	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/spf13/viper"
 )
 
-// Config represents unified configuration for both backend server and worker
 type Config struct {
-	API     string     `mapstructure:"api"` // Backend API URL for fetching hub config
-	TempDir string     `mapstructure:"temp_dir"`
-	Auth    AuthConfig `mapstructure:"auth"`
-	Jobs    []job.Job  `mapstructure:"jobs"`
-}
-
-// tempConfig is used for initial Viper unmarshaling with map configs
-type tempConfig struct {
 	API     string     `mapstructure:"api"`
 	TempDir string     `mapstructure:"temp_dir"`
 	Auth    AuthConfig `mapstructure:"auth"`
-	Jobs    []tempJob  `mapstructure:"jobs"`
+	Path    PathConfig `mapstructure:"path"`
+	Jobs    []job.Job  `mapstructure:"jobs"`
 }
 
-// tempJob is used for initial unmarshaling before converting to typed config
-type tempJob struct {
-	ID          string                `mapstructure:"id"`
-	Provider    string                `mapstructure:"provider"`
-	Config      map[string]any        `mapstructure:"config"`
-	Encryption  job.EncryptionConfig  `mapstructure:"encryption_config"`
-	Compression job.CompressionConfig `mapstructure:"compression_config"`
-}
-
-// NewConfig loads configuration from file, environment variables, and optionally Vault
-// configPath: path to the config file (e.g., "config.yaml"). If empty, looks for "config.yaml" in current directory
-func NewConfig(ctx context.Context, configPath string) (*Config, error) {
-	// Set default values matching config.yaml
-	viper.SetDefault("api", "")
-
-	// Auth configuration defaults
-	viper.SetDefault("auth.server", "")
-	viper.SetDefault("auth.username", "")
-	viper.SetDefault("auth.password", "")
-	viper.SetDefault("auth.client_id", "")
-	viper.SetDefault("auth.audience", "")
-
-	// Set config file
-	if configPath != "" {
-		viper.SetConfigFile(configPath)
-	} else {
-		viper.SetConfigName("config")
-		viper.SetConfigType("yaml")
-		viper.AddConfigPath(".")
+func NewConfig(_ context.Context, configPath string) (*Config, error) {
+	if configPath == "" {
+		configPath = "config.yaml"
 	}
 
-	// Read the config file
-	if err := viper.ReadInConfig(); err != nil {
-		var configFileNotFoundError viper.ConfigFileNotFoundError
-		if errors.As(err, &configFileNotFoundError) {
-			fmt.Println("No config file found, using defaults and environment variables")
-		} else {
-			return nil, fmt.Errorf("error reading config file: %w", err)
-		}
+	v := viper.New()
+	v.SetConfigFile(configPath)
+
+	// API defaults
+	v.SetDefault("api", "http://localhost:8000")
+
+	// Global defaults
+	v.SetDefault("temp_dir", "/tmp/agent")
+
+	// Auth defaults
+	v.SetDefault("auth.server", "")
+	v.SetDefault("auth.username", "")
+	v.SetDefault("auth.password", "")
+	v.SetDefault("auth.client_id", "")
+	v.SetDefault("auth.audience", "")
+
+	// Path defaults
+	v.SetDefault("path.git", "git")
+	v.SetDefault("path.mysql", "mysqldump")
+	v.SetDefault("path.ssh", "ssh")
+	v.SetDefault("path.psql", "pg_dump")
+	v.SetDefault("path.curl", "curl")
+	v.SetDefault("path.aws", "aws")
+	v.SetDefault("path.zip", "zip")
+	v.SetDefault("path.redis", "redis-cli")
+	v.SetDefault("path.tar", "tar")
+	v.SetDefault("path.mssql", "sqlcmd")
+
+	if err := v.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
 
-	// Set up Viper to read from environment variables
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.AutomaticEnv()
-
-	// First unmarshal into temp config with map-based job configs
-	var temp tempConfig
-	if err := viper.Unmarshal(&temp); err != nil {
-		return nil, err
+	// rawJob mirrors Job but keeps Config as a raw map for two-pass parsing
+	type rawJob struct {
+		ID          string                `mapstructure:"id"`
+		Provider    job.Provider          `mapstructure:"provider"`
+		Config      map[string]any        `mapstructure:"config"`
+		Encryption  job.EncryptionConfig  `mapstructure:"encryption"`
+		Compression job.CompressionConfig `mapstructure:"compression"`
 	}
 
-	// Convert to final config with typed job configs
-	config := &Config{
-		API:     temp.API,
-		TempDir: temp.TempDir,
-		Auth:    temp.Auth,
-		Jobs:    make([]job.Job, len(temp.Jobs)),
+	// First pass: unmarshal with raw config maps
+	var raw struct {
+		API     string     `mapstructure:"api"`
+		TempDir string     `mapstructure:"temp_dir"`
+		Auth    AuthConfig `mapstructure:"auth"`
+		Path    PathConfig `mapstructure:"path"`
+		Jobs    []rawJob   `mapstructure:"jobs"`
+	}
+	if err := v.Unmarshal(&raw); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	// Convert each job's map config to typed config
-	for i, tj := range temp.Jobs {
-		provider := job.JobProvider(tj.Provider)
+	// Second pass: convert raw config maps to typed configs
+	cfg := &Config{
+		API:     raw.API,
+		TempDir: raw.TempDir,
+		Auth:    raw.Auth,
+		Path:    raw.Path,
+		Jobs:    make([]job.Job, 0, len(raw.Jobs)),
+	}
 
-		// Convert map to typed config
-		typedConfig, err := job.FromMap(provider, tj.Config)
+	for _, rj := range raw.Jobs {
+		typedCfg, err := job.ConfigFromMap(rj.Provider, rj.Config)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load config for job %s (provider %s): %w", tj.ID, tj.Provider, err)
+			return nil, fmt.Errorf("job %s: %w", rj.ID, err)
 		}
-
-		config.Jobs[i] = job.Job{
-			ID:          tj.ID,
-			Provider:    provider,
-			Config:      typedConfig,
-			Encryption:  tj.Encryption,
-			Compression: tj.Compression,
-		}
+		cfg.Jobs = append(cfg.Jobs, job.Job{
+			ID:          rj.ID,
+			Provider:    rj.Provider,
+			Config:      typedCfg,
+			Encryption:  rj.Encryption,
+			Compression: rj.Compression,
+		})
 	}
 
-	return config, nil
+	return cfg, nil
 }

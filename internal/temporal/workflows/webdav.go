@@ -9,9 +9,9 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-func AWSS3BackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) error {
+func WebDAVBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) error {
 	logger := workflow.GetLogger(ctx)
-	logger.Info("AWSS3BackupWorkflow started", "jobId", input.JobId)
+	logger.Info("WebDAVBackupWorkflow started", "jobId", input.JobId)
 
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Minute,
@@ -36,8 +36,8 @@ func AWSS3BackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) error
 	}
 
 	var dlOut activities.DownloadActivityOutput
-	if err := workflow.ExecuteActivity(ctx, internal.ActivityNameAWSS3Download,
-		activities.AWSS3DownloadActivityInput{Job: getJobOut.Job}).Get(ctx, &dlOut); err != nil {
+	if err := workflow.ExecuteActivity(ctx, internal.ActivityNameWebDAVDownload,
+		activities.WebDAVDownloadActivityInput{Job: getJobOut.Job}).Get(ctx, &dlOut); err != nil {
 		return err
 	}
 

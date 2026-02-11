@@ -1,7 +1,7 @@
 package activities
 
 import (
-	"agent/internal/config/job"
+	"agent/internal/job"
 	"context"
 	"crypto/sha256"
 	"fmt"
@@ -31,18 +31,15 @@ func (a *Activities) DownloadActivity(ctx context.Context, input DownloadActivit
 	logger := activity.GetLogger(ctx)
 	logger.Debug("DownloadActivity called", "jobId", input.Job.ID)
 
-	// Load typed HTTP config
 	httpConfig, err := job.LoadAs[*job.HTTPConfig](*input.Job)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load HTTP config: %w", err)
 	}
-
-	// Validate config
 	if err := httpConfig.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid HTTP config: %w", err)
 	}
 
-	endpoint := httpConfig.URL
+	endpoint := httpConfig.Endpoint
 	method := httpConfig.Method
 	if method == "" {
 		method = "GET"
@@ -50,34 +47,28 @@ func (a *Activities) DownloadActivity(ctx context.Context, input DownloadActivit
 
 	logger.Info("Downloading file", "endpoint", endpoint, "method", method)
 
-	// Create HTTP request
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Add headers if present
-	for k, v := range httpConfig.Headers {
-		req.Header.Set(k, v)
+	for k, vals := range httpConfig.Header {
+		for _, v := range vals {
+			req.Header.Add(k, v)
+		}
 	}
 
-	// Use default timeout
-	timeoutVal := 30 * time.Minute
-
-	// Execute request
-	client := &http.Client{Timeout: timeoutVal}
+	client := &http.Client{Timeout: 30 * time.Minute}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("download failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Check status code
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("download failed with status: %d", resp.StatusCode)
 	}
 
-	// Extract filename from URL or Content-Disposition header
 	filename := filepath.Base(endpoint)
 	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
 		if _, params, err := mime.ParseMediaType(cd); err == nil {
@@ -87,7 +78,6 @@ func (a *Activities) DownloadActivity(ctx context.Context, input DownloadActivit
 		}
 	}
 
-	// Create temp file
 	tempFile := filepath.Join(a.Config.TempDir, fmt.Sprintf("%s-%s", input.Job.ID, filename))
 	file, err := os.Create(tempFile)
 	if err != nil {
@@ -95,17 +85,14 @@ func (a *Activities) DownloadActivity(ctx context.Context, input DownloadActivit
 	}
 	defer file.Close()
 
-	// Create hash calculator
 	hash := sha256.New()
 	multiWriter := io.MultiWriter(file, hash)
 
-	// Download and calculate hash
 	size, err := io.Copy(multiWriter, resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download file: %w", err)
 	}
 
-	// Get MIME type
 	mimeType := resp.Header.Get("Content-Type")
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
@@ -119,6 +106,6 @@ func (a *Activities) DownloadActivity(ctx context.Context, input DownloadActivit
 		MimeType: mimeType,
 	}
 
-	logger.Info("Download completed", "filePath", result.FilePath, "size", result.Size, "checksum", result.Checksum)
+	logger.Info("Download completed", "filePath", result.FilePath, "size", result.Size)
 	return result, nil
 }

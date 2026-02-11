@@ -1,7 +1,7 @@
-package pkg
+package hub
 
 import (
-	"agent/internal/auth"
+	"agent/internal/authentication"
 	"agent/internal/config"
 	"context"
 	"encoding/json"
@@ -13,7 +13,7 @@ import (
 
 // LoadHubConfig fetches hub configuration from the backend API
 // Must be called after loading config file and obtaining auth token
-func LoadHubConfig(ctx context.Context, as auth.AuthService, c *config.Config) (*config.HubConfig, error) {
+func LoadHubConfig(ctx context.Context, as authentication.AuthenticationService, c *config.Config) (*config.HubConfig, error) {
 
 	url := fmt.Sprintf("%s/v1/agents/config/hub", c.API)
 

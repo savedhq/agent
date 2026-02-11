@@ -1,11 +1,9 @@
 package job
 
-import (
-	"errors"
-)
+import "errors"
 
 const (
-	JobProviderScript JobProvider = "script"
+	JobProviderScript Provider = "script"
 )
 
 type ScriptConfig struct {
@@ -21,6 +19,6 @@ func (c *ScriptConfig) Validate() error {
 	return nil
 }
 
-func (c *ScriptConfig) Type() JobProvider {
+func (c *ScriptConfig) Type() Provider {
 	return JobProviderScript
 }

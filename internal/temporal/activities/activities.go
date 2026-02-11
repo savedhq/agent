@@ -1,7 +1,7 @@
 package activities
 
 import (
-	"agent/internal/auth"
+	"agent/internal/authentication"
 	"agent/internal/config"
 
 	"go.temporal.io/sdk/client"
@@ -11,13 +11,13 @@ import (
 // Refactored to use dependency injection instead of full config
 type Activities struct {
 	Config         *config.Config
-	Auth           auth.AuthService
+	Auth           authentication.AuthenticationService
 	Hub            *config.HubConfig
 	TemporalClient client.Client
 }
 
 // NewActivities creates a new Activities instance with required dependencies
-func NewActivities(config *config.Config, service auth.AuthService, hubConfig config.HubConfig, temporalClient client.Client) *Activities {
+func NewActivities(config *config.Config, service authentication.AuthenticationService, hubConfig config.HubConfig, temporalClient client.Client) *Activities {
 	return &Activities{
 		Config:         config,
 		Auth:           service,
