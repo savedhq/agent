@@ -39,7 +39,7 @@ func main() {
 
 	clientOptions := envconfig.MustLoadDefaultClientOptions()
 
-	if hubConfig.TLS {
+	if hubConfig.TLS.Enabled {
 		tlsConfig := &tls.Config{
 			MinVersion: tls.VersionTLS12,
 			NextProtos: []string{"h2"},
