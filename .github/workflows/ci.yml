@@ -6,6 +6,7 @@ on:
     tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -14,86 +15,127 @@ env:
 jobs:
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.5'
+          go-version-file: 'go.mod'
+          cache-dependency-path: go.sum
 
       - name: Run tests
-        run: go test -v ./...
+        run: go test ./...
 
   build-and-push-image:
     name: Build and Push Docker Image
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Log in to the Container registry
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
+      - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=ref,event=tag
-            type=sha
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=sha,prefix=,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
+          platforms: ${{ matrix.platform }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=agent
+          cache-to: type=gha,mode=max,scope=agent
 
   build-binaries:
     name: Build Binaries
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
     permissions:
       contents: write
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - os: windows
-            arch: amd64
-            ext: .exe
-          - os: linux
-            arch: amd64
-            ext: ''
-          - os: freebsd
-            arch: amd64
-            ext: ''
-          - os: darwin
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            os: linux
             arch: arm64
             ext: ''
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            os: linux
+            arch: amd64
+            ext: ''
+          - platform: darwin/arm64
+            runner: ubuntu-latest
+            os: darwin
+            arch: arm64
+            ext: ''
+          - platform: windows/amd64
+            runner: ubuntu-latest
+            os: windows
+            arch: amd64
+            ext: .exe
+          - platform: freebsd/arm64
+            runner: ubuntu-latest
+            os: freebsd
+            arch: arm64
+            ext: ''
+          - platform: freebsd/amd64
+            runner: ubuntu-latest
+            os: freebsd
+            arch: amd64
+            ext: ''
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.5'
+          go-version-file: 'go.mod'
+          cache-dependency-path: go.sum
 
       - name: Build binary
         env:
