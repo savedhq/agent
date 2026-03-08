@@ -1,0 +1,6 @@
+- Memory: `.claude/memory.md` — update whenever you learn something worth remembering (architecture decisions, key paths, infra changes, resolved issues); prefer updating existing sections over appending
+- Do not create README or script files unless explicitly asked
+- Keep files small — split logic into focused modules; keep functions small and focused
+- Use descriptive naming for variables and functions
+- Notion backlog: https://www.notion.so/ryanparsa/29f2f5f9656f80b9b71bcdd8e82edd24?v=2e12f5f9656f80ccb50f000cd6c76364 — always use MCP to read/write, never ask the user to do it manually
+- No attribution in git commits or pull requests
