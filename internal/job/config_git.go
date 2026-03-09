@@ -2,9 +2,7 @@ package job
 
 import "errors"
 
-const (
-	JobProviderGit Provider = "git"
-)
+const JobProviderGit Provider = "git"
 
 type GitConfig struct {
 	URL               string `json:"url"`

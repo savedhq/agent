@@ -2,9 +2,7 @@ package job
 
 import "errors"
 
-const (
-	JobProviderFTP Provider = "ftp"
-)
+const JobProviderFTP Provider = "ftp"
 
 type FTPConfig struct {
 	Protocol string `json:"protocol"`

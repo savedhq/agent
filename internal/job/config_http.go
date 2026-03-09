@@ -5,9 +5,7 @@ import (
 	"net/http"
 )
 
-const (
-	JobProviderHTTP Provider = "http"
-)
+const JobProviderHTTP Provider = "http"
 
 type HTTPConfig struct {
 	Endpoint string      `json:"endpoint"`
@@ -23,6 +21,4 @@ func (c *HTTPConfig) Validate() error {
 	return nil
 }
 
-func (c *HTTPConfig) Type() Provider {
-	return JobProviderHTTP
-}
+func (c *HTTPConfig) Type() Provider { return JobProviderHTTP }

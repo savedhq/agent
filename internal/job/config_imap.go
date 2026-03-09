@@ -2,9 +2,7 @@ package job
 
 import "errors"
 
-const (
-	JobProviderIMAP Provider = "imap"
-)
+const JobProviderIMAP Provider = "imap"
 
 type IMAPConfig struct {
 	Host     string   `json:"host"`

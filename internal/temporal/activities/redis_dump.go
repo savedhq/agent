@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 
 	"go.temporal.io/sdk/activity"
 )
@@ -26,6 +25,7 @@ func (a *Activities) RedisDumpActivity(ctx context.Context, input RedisDumpActiv
 	if err != nil {
 		return nil, fmt.Errorf("failed to load Redis config: %w", err)
 	}
+
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid Redis config: %w", err)
 	}
@@ -33,16 +33,10 @@ func (a *Activities) RedisDumpActivity(ctx context.Context, input RedisDumpActiv
 	filename := fmt.Sprintf("%s.rdb", input.Job.ID)
 	tempFilePath := filepath.Join(a.Config.TempDir, filename)
 
-	args := []string{"-h", cfg.Host, "-p", strconv.Itoa(cfg.Port)}
-	if cfg.Password != "" {
-		args = append(args, "-a", cfg.Password)
-	}
-	if cfg.TLS {
-		args = append(args, "--tls")
-	}
-	args = append(args, "--rdb", tempFilePath)
+	// redis-cli -u <connection_string> --rdb <filepath>
+	args := []string{"-u", cfg.ConnectionString, "--rdb", tempFilePath}
 
-	logger.Info("Executing redis-cli --rdb", "host", cfg.Host, "port", cfg.Port)
+	logger.Info("Executing redis-cli --rdb", "uri", cfg.ConnectionString)
 
 	if output, err := exec.CommandContext(ctx, "redis-cli", args...).CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("redis-cli failed: %w. Output: %s", err, string(output))

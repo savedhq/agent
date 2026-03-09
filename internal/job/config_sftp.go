@@ -2,9 +2,7 @@ package job
 
 import "errors"
 
-const (
-	JobProviderSFTP Provider = "sftp"
-)
+const JobProviderSFTP Provider = "sftp"
 
 type SFTPConfig struct {
 	Host       string `json:"host"`

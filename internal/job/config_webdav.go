@@ -2,9 +2,7 @@ package job
 
 import "errors"
 
-const (
-	JobProviderWebDAV Provider = "webdav"
-)
+const JobProviderWebDAV Provider = "webdav"
 
 type WebDAVConfig struct {
 	URL      string `json:"url"`
