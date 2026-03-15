@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"go.temporal.io/sdk/activity"
 )
@@ -59,8 +58,7 @@ func (a *Activities) BackupConfirmActivity(ctx context.Context, input BackupConf
 	req.Header.Set("Content-Type", "application/json")
 
 	// Execute request
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}

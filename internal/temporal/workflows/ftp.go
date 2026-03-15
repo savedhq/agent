@@ -3,9 +3,7 @@ package workflows
 import (
 	"agent/internal"
 	"agent/internal/temporal/activities"
-	"time"
 
-	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -13,15 +11,7 @@ func FTPBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) error {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("FTPBackupWorkflow started", "jobId", input.JobId)
 
-	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: 30 * time.Minute,
-		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:    time.Second,
-			BackoffCoefficient: 2.0,
-			MaximumInterval:    5 * time.Minute,
-			MaximumAttempts:    3,
-		},
-	})
+	ctx = workflow.WithActivityOptions(ctx, defaultActivityOptions)
 
 	var getJobOut activities.GetJobActivityOutput
 	if err := workflow.ExecuteActivity(ctx, internal.ActivityNameGetJob,

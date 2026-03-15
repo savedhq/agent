@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/activity"
@@ -65,8 +64,7 @@ func (a *Activities) BackupRequestActivity(ctx context.Context, input BackupRequ
 	req.Header.Set("Content-Type", "application/json")
 
 	// Execute request
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
 		logger.Error("HTTP request failed", "url", url, "error", err)
 		return nil, fmt.Errorf("request failed: %w", err)

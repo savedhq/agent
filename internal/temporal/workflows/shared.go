@@ -4,9 +4,21 @@ import (
 	"agent/internal"
 	"agent/internal/job"
 	"agent/internal/temporal/activities"
+	"time"
 
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
+
+var defaultActivityOptions = workflow.ActivityOptions{
+	StartToCloseTimeout: 30 * time.Minute,
+	RetryPolicy: &temporal.RetryPolicy{
+		InitialInterval:    time.Second,
+		BackoffCoefficient: 2.0,
+		MaximumInterval:    5 * time.Minute,
+		MaximumAttempts:    3,
+	},
+}
 
 // ProcessAndUpload handles compress → encrypt → upload → confirm steps shared by all providers.
 func ProcessAndUpload(ctx workflow.Context, j *job.Job, jobId, backupId, filePath string, size int64, checksum, name, mimeType string) error {
@@ -57,7 +69,7 @@ func ProcessAndUpload(ctx workflow.Context, j *job.Job, jobId, backupId, filePat
 	var uploadOut activities.BackupUploadActivityOutput
 	err := workflow.ExecuteActivity(ctx, internal.ActivityNameBackupUpload,
 		activities.BackupUploadActivityInput{
-			JobId: jobId, BackupId: backupId, FilePath: currentFile,
+			JobId: jobId, BackupId: backupId,
 			Size: currentSize, Checksum: currentChecksum, Name: currentName, MimeType: currentMimeType,
 		},
 	).Get(ctx, &uploadOut)

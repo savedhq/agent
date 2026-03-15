@@ -3,6 +3,8 @@ package activities
 import (
 	"agent/internal/authentication"
 	"agent/internal/config"
+	"net/http"
+	"time"
 
 	"go.temporal.io/sdk/client"
 )
@@ -14,6 +16,7 @@ type Activities struct {
 	Auth           authentication.AuthenticationService
 	Hub            *config.HubConfig
 	TemporalClient client.Client
+	HTTPClient     *http.Client
 }
 
 // NewActivities creates a new Activities instance with required dependencies
@@ -23,5 +26,6 @@ func NewActivities(config *config.Config, service authentication.AuthenticationS
 		Auth:           service,
 		Hub:            &hubConfig,
 		TemporalClient: temporalClient,
+		HTTPClient:     &http.Client{Timeout: 30 * time.Second},
 	}
 }

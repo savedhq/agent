@@ -31,7 +31,7 @@ func (a *Activities) GitDownloadActivity(ctx context.Context, input GitDownloadA
 		return nil, fmt.Errorf("invalid Git config: %w", err)
 	}
 
-	cloneDir, err := os.MkdirTemp("", "git-clone-*")
+	cloneDir, err := os.MkdirTemp(a.Config.TempDir, "git-clone-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp clone dir: %w", err)
 	}

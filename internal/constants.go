@@ -31,7 +31,7 @@ const (
 	ActivityNameRedisDump            = "RedisDumpActivity"
 	ActivityNameAWSDynamoDBDump      = "AWSDynamoDBDumpActivity"
 	ActivityNameAWSS3Download        = "AWSS3DownloadActivity"
-	ActivityNameFileTransferDownload = "FileTransferDownloadActivity"
+	ActivityNameFileTransferDownload = "FTPDownloadActivity"
 	ActivityNameSFTPDownload         = "SFTPDownloadActivity"
 
 	ActivityNameWebDAVDownload = "WebDAVDownloadActivity"

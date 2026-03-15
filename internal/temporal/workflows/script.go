@@ -3,9 +3,7 @@ package workflows
 import (
 	"agent/internal"
 	"agent/internal/temporal/activities"
-	"time"
 
-	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -13,16 +11,7 @@ func ScriptBackupWorkflow(ctx workflow.Context, input GeneralWorkflowInput) erro
 	logger := workflow.GetLogger(ctx)
 	logger.Info("ScriptBackupWorkflow started", "jobId", input.JobId)
 
-	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 30 * time.Minute,
-		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:    time.Second,
-			BackoffCoefficient: 2.0,
-			MaximumInterval:    5 * time.Minute,
-			MaximumAttempts:    3,
-		},
-	}
-	ctx = workflow.WithActivityOptions(ctx, ao)
+	ctx = workflow.WithActivityOptions(ctx, defaultActivityOptions)
 
 	// 1. Get job from config
 	var getJobOut activities.GetJobActivityOutput

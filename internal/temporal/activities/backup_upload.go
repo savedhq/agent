@@ -19,7 +19,6 @@ type BackupUploadActivityInput struct {
 	Checksum string `json:"checksum"`
 	Name     string `json:"name"`
 	MimeType string `json:"mime_type"`
-	FilePath string `json:"file_path"`
 }
 
 type BackupUploadActivityOutput struct {
@@ -67,8 +66,7 @@ func (a *Activities) BackupUploadActivity(ctx context.Context, input BackupUploa
 	req.Header.Set("Content-Type", "application/json")
 
 	// Execute request
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
