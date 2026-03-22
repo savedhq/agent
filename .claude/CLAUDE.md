@@ -4,3 +4,4 @@
 - Use descriptive naming for variables and functions
 - Notion backlog: https://www.notion.so/ryanparsa/29f2f5f9656f80b9b71bcdd8e82edd24?v=2e12f5f9656f80ccb50f000cd6c76364 — always use MCP to read/write, never ask the user to do it manually
 - No attribution in git commits or pull requests
+- After making code changes, update the relevant README to reflect those changes
